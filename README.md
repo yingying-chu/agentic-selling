@@ -26,6 +26,23 @@ Take photos → your assistant (Claude, ChatGPT…) or the Shopify app identifie
 - **Routing:** fixed rules pick marketplaces by category fit and whether the item can clear the floor there ([routing.ts](packages/core/src/routing.ts)).
 - **Posting:** v1 hands the seller copy-ready listings with links for Poshmark, Mercari, Depop, Vinted, Grailed and FB. eBay API posting is next.
 
+## Models, routing and fallbacks (Vercel AI Gateway)
+
+Two modalities in, two out: **photos → text** (item details, grades, honesty verdicts) and **photos → photos** (item outlines, AI model shots), plus text → text listings. All calls go through Vercel AI Gateway; the routing table lives in [models.ts](packages/agents/src/models.ts).
+
+| Task | In → out | Primary | Backups | Why |
+|---|---|---|---|---|
+| Identify item | photos → details | Claude Opus 5.5 | Sonnet 5.5 → Opus 5 | Reading tags right sets the price; once per item |
+| Grade photos | photos → scores | Claude Haiku 5.5 | Sonnet 5.5 | Simple call; ~40× cheaper than Opus, fastest |
+| Write listings | text → text | Claude Sonnet 5.5 | Haiku 5.5 → Opus 5.5 | Good copy at half Opus price, faster |
+| Honesty check | photos → verdict | Claude Sonnet 5.5 | Opus 5.5 | Runs per edited image; must be reliable |
+| Item outline | photo → mask | Nano Banana 2.1 | Gemini 3.1 Flash Image → 2.5 Flash Image | B/W output; cheapest and fastest (~$0.03) |
+| AI model photo | photos → photo | Nano Banana Pro | Nano Banana 2.1 → 3.1 Flash Image | Buyer-facing, most faithful (~$0.13) |
+
+**When a provider fails:** each model is tried across its providers first (Claude: Anthropic → Vertex → Bedrock; Gemini: Google → Vertex), then the Gateway moves to the next model in the list (`providerOptions.gateway.models` + `order`). Backup image renders still have to pass the honesty check, so a weaker fallback can't put a misleading photo in a listing. If a step fails entirely, the item keeps the seller's own corrected photos.
+
+**Seeing it:** every call's answering model, provider, latency and cost (from the Gateway's routing metadata) is saved on the item and shown on the phone page. The "simulate an outage" switch replaces each primary model ID with one that doesn't exist, so the Gateway really fails it and really falls back. Example: listings normally on Sonnet 5.5 (4.1 s, $0.0055); with the outage, Haiku 5.5 answered (2.6 s, $0.0002).
+
 ## Layout
 
 | Path | What |
