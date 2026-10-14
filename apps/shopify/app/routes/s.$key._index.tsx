@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, Link, redirect, useLoaderData, useNavigation, useParams } from "react-router";
+import { Form, Link, redirect, useFetcher, useLoaderData, useNavigation, useParams } from "react-router";
 import { isPresenter, phoneContext } from "../phone.server";
+import { syncStore } from "../sync.server";
 import { STAGE_LABEL } from "../ui";
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
@@ -22,6 +23,16 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
 export const action = async ({ request, params }: ActionFunctionArgs) => {
   const { store } = await phoneContext(params.key);
   const form = await request.formData();
+  if (form.get("intent") === "sync") {
+    const { checked, sold } = await syncStore(store);
+    return {
+      synced: {
+        checked: checked.length,
+        unreadable: checked.filter((c) => c.availability === "unknown").length,
+        sold: sold.map((s) => ({ title: s.item.title, on: s.soldOn, toDelist: s.toDelist.map((d) => ({ name: d.name, url: d.url })) })),
+      },
+    };
+  }
   if (form.get("intent") === "reset") {
     // Presenter link only: archive (not delete) everything so the next judge starts clean.
     if (!isPresenter(params.key)) return { error: "Reset is only available on the presenter link." };
@@ -67,6 +78,8 @@ export default function PhoneHome() {
   const navigation = useNavigation();
   const resetting = navigation.formData?.get("intent") === "reset";
   const { key } = useParams();
+  const sync = useFetcher<typeof action>();
+  const synced = sync.data && "synced" in sync.data ? sync.data.synced : null;
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +178,28 @@ export default function PhoneHome() {
 
       {items.length > 0 && (
         <div className="card">
-          <h2>Your items</h2>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0 }}>Your items</h2>
+            <sync.Form method="post">
+              <input type="hidden" name="intent" value="sync" />
+              <button className="btn" disabled={sync.state !== "idle"}>
+                {sync.state !== "idle" ? "Checking…" : "Check for sales"}
+              </button>
+            </sync.Form>
+          </div>
+          <p className="muted" style={{ margin: "6px 0 8px" }}>Sellie also checks your live listings every 10 minutes.</p>
+          {synced && (
+            <div className={`banner ${synced.sold.length ? "bad" : "ok"}`}>
+              {synced.sold.length === 0
+                ? `Checked ${synced.checked} live listing${synced.checked === 1 ? "" : "s"}: nothing sold yet.${synced.unreadable ? ` (${synced.unreadable} couldn't be read; try again later.)` : ""}`
+                : synced.sold.map((s) => (
+                    <div key={s.title}>
+                      <strong>Sold on {s.on.replace("_", " ")}: {s.title}.</strong> Locked in Shopify.
+                      {s.toDelist.length > 0 && <> Take down: {s.toDelist.map((d) => d.name).join(", ")}.</>}
+                    </div>
+                  ))}
+            </div>
+          )}
           {items.map((i) => (
             <Link key={i.id} to={`/s/${key}/items/${i.id}`} className="item" style={{ padding: "8px 0" }}>
               {i.thumb ? <img src={i.thumb} alt="" /> : <img alt="" />}

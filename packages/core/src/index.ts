@@ -6,3 +6,4 @@ export * from "./types.ts";
 export * from "./inventory.ts";
 export * from "./plan.ts";
 export * from "./photos.ts";
+export * from "./availability.ts";

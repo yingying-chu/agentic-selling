@@ -10,6 +10,7 @@ import {
   type ItemStage,
 } from "@agentic-selling/core";
 import { makeListingPhotos } from "../phone.server";
+import { syncStore } from "../sync.server";
 import {
   confirmDelisted,
   getSettings,
@@ -334,6 +335,30 @@ export function registerTools(server: McpServer, store: InventoryStore, shop: st
       return json(
         `Marked sold on ${CHANNELS[channel].name} and locked. The seller must take these down now, or someone else may buy it:`,
         toDelist.map((d) => ({ platform: d.name, channel: d.channel, link: d.url ?? "(no link saved; find it in their listings)" })),
+      );
+    },
+  );
+
+  server.registerTool(
+    "check_sales",
+    {
+      title: "Check for sales",
+      description:
+        "Reads every live listing's public page. If one has sold, locks the item in Shopify and returns the other listings to take down (open each link in the seller's browser and delist it, then confirm_delisted). Also runs automatically every 10 minutes.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const { checked, sold } = await syncStore(store);
+      if (!sold.length) {
+        return json(`Checked ${checked.length} live listings; nothing sold.`, checked.map((c) => ({ item: c.title, channel: c.channel, status: c.availability })));
+      }
+      return json(
+        "Sold! Each item is locked in Shopify. Take these listings down now:",
+        sold.map((s) => ({
+          item: s.item.title,
+          soldOn: CHANNELS[s.soldOn].name,
+          takeDown: s.toDelist.map((d) => ({ platform: d.name, channel: d.channel, link: d.url })),
+        })),
       );
     },
   );
