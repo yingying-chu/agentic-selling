@@ -1,7 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { ItemFactsSchema } from "@agentic-selling/agents";
-import { CHANNELS, CHANNEL_IDS, type InventoryItem, type InventoryStore, type ItemStage } from "@agentic-selling/core";
+import {
+  CHANNELS,
+  CHANNEL_IDS,
+  photosForChannel,
+  type InventoryItem,
+  type InventoryStore,
+  type ItemStage,
+} from "@agentic-selling/core";
+import { makeListingPhotos } from "../phone.server";
 import {
   confirmDelisted,
   getSettings,
@@ -25,8 +33,9 @@ Typical flow:
 3. If there's no floor price, ask: "What's the least you'd be happy to walk away with after fees and shipping?" Then set_floor_price.
 4. plan_item for each platform's price and the recommended platforms. Explain briefly, in plain words.
 5. get_listing_guide for the recommended platforms, write a listing for each following its rules, then save_listings.
-6. Hand the seller copy-ready listings with the posting link for each platform. When they say they've posted, mark_posted (ask for the listing link so you can send them straight to it later).
-7. When something sells: mark_sold right away (this locks the item so it can't sell twice), then walk them through taking down each remaining listing and confirm_delisted for each.
+6. improve_photos once per item for listing-ready photos (corrected, studio cover, AI model shot; every edit is checked against the originals).
+7. To post: get_posting_kit for the platform. If you can control the seller's browser (e.g. Claude in Chrome), open the kit's postUrl in their logged-in session, fill every field from the kit, attach the photos, and stop before the final Post/Publish button so the seller confirms. Never log in for them or type their password. Otherwise hand them the kit to copy. Afterwards mark_posted with the listing link.
+8. When something sells: mark_sold right away (this locks the item so it can't sell twice), then walk them through taking down each remaining listing and confirm_delisted for each.
 
 Be honest in listings: never invent brand, material, or measurements, and always disclose flaws. Never tell the seller to accept an offer below the plan's minimum.`;
 
@@ -219,6 +228,57 @@ export function registerTools(server: McpServer, store: InventoryStore, shop: st
           acceptOffersFrom: d.price.minAcceptPrice,
         })),
       );
+    },
+  );
+
+  server.registerTool(
+    "improve_photos",
+    {
+      title: "Make listing-ready photos",
+      description:
+        "Fixes light and color on the seller's photos, makes a clean studio cover from the real photo, and optionally an AI model photo. Every AI-touched image is checked against the originals; anything that changes the item is dropped. Takes 1-2 minutes.",
+      inputSchema: z.object({ item_id: itemId, model_photo: z.boolean().default(true) }),
+    },
+    async ({ item_id, model_photo }) => {
+      const item = await load(item_id);
+      if (item.photos.some((p) => p.kind !== "original")) return text("This item already has listing-ready photos.");
+      const r = await makeListingPhotos(store, item, model_photo);
+      return json(`Added ${r.added} photos.`, { retakeTips: r.retakeTips, worthAdding: r.missingShots, droppedForAccuracy: r.rejected });
+    },
+  );
+
+  server.registerTool(
+    "get_posting_kit",
+    {
+      title: "Get posting kit",
+      description:
+        "Everything needed to post the item on one platform: where to post, every form field value, photo URLs in order (cover first), and offer limits. Use it to fill the platform's listing form.",
+      inputSchema: z.object({ item_id: itemId, channel }),
+    },
+    async ({ item_id, channel }) => {
+      const item = await load(item_id);
+      const listing = item.listings.find((l) => l.channel === channel);
+      if (!listing) return text(`No ${CHANNELS[channel].name} listing yet. Run plan_item, write one, and save_listings first.`);
+      const { photos, disclosure } = photosForChannel(item.photos, channel);
+      const f = item.facts;
+      return json(`Posting kit for ${CHANNELS[channel].name}. Fill the form with these values; let the seller press the final Post button.`, {
+        postUrl: POST_LINKS[channel],
+        fields: {
+          title: listing.title,
+          description: [listing.description, disclosure].filter(Boolean).join("\n\n"),
+          price: listing.price.listPrice,
+          brand: f?.brand,
+          category: listing.categoryHint,
+          size: f?.size,
+          condition: f?.condition.replaceAll("_", " "),
+          colors: f?.colors,
+          materials: f?.materials,
+          tags: listing.tags,
+        },
+        photos: photos.map((p) => ({ url: p.url, kind: p.kind })),
+        offers: { acceptFrom: listing.price.minAcceptPrice, neverBelow: listing.price.minAcceptPrice },
+        afterPosting: "Call mark_posted with the listing URL.",
+      });
     },
   );
 

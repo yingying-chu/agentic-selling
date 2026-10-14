@@ -32,7 +32,7 @@ model Session {
 /// Per-shop selling preferences.
 model ShopSettings {
   shop               String   @id
-  enabledChannels    String[] @default(["ebay", "poshmark", "mercari", "depop", "vinted", "grailed"])
+  enabledChannels    String[] @default(["fb_marketplace", "poshmark", "vinted"])
   labelCost          Float    @default(8)
   sellerPaysShipping Boolean  @default(false)
   updatedAt          DateTime @updatedAt

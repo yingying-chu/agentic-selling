@@ -1,4 +1,5 @@
 import { CHANNELS, type ChannelId } from "./channels.ts";
+import type { PhotoKind } from "./photos.ts";
 import type { ChannelListingState, ItemFacts, ListingDraft } from "./types.ts";
 
 // The inventory layer. Shopify is the first implementation; a hosted database
@@ -8,6 +9,17 @@ import type { ChannelListingState, ItemFacts, ListingDraft } from "./types.ts";
 export interface InventoryPhoto {
   url: string;
   alt: string | null;
+  kind: PhotoKind;
+  /** For edited photos, the URL of the photo they were made from. */
+  sourceUrl?: string;
+}
+
+export interface NewPhoto {
+  data: Uint8Array;
+  mediaType: string;
+  alt: string;
+  kind: PhotoKind;
+  sourceUrl?: string;
 }
 
 /** Where an item is in its life, derived from what's been saved. */
@@ -20,6 +32,8 @@ export interface InventoryItem {
   /** null when the store isn't tracking quantity for this item. */
   quantity: number | null;
   floorNet: number | null;
+  /** What the seller said about it when adding it ("worn twice, runs small"). */
+  notes: string | null;
   facts: ItemFacts | null;
   listings: ListingDraft[];
   channels: ChannelListingState[];
@@ -45,6 +59,11 @@ export interface InventoryStore {
   saveChannelStates(id: string, states: ChannelListingState[]): Promise<void>;
   /** Sets on-hand quantity to zero so the item can't sell twice. */
   zeroQuantity(id: string): Promise<void>;
+  /** Creates a new item (quantity 1) from the seller's photos; returns its ID. */
+  createItem(title: string, photos: NewPhoto[], notes?: string): Promise<string>;
+  renameItem(id: string, title: string): Promise<void>;
+  /** Attaches processed photos (enhanced, studio, AI) to an item. */
+  addPhotos(id: string, photos: NewPhoto[]): Promise<void>;
 }
 
 export function stageOf(item: Pick<InventoryItem, "facts" | "floorNet" | "channels" | "quantity">): ItemStage {

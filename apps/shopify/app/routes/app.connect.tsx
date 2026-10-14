@@ -26,13 +26,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   const label = String(form.get("label") || "My AI assistant").slice(0, 60);
   const secret = await createConnection(session.shop, label);
-  return { url: `${process.env.SHOPIFY_APP_URL}/mcp?key=${secret}` };
+  return {
+    url: `${process.env.SHOPIFY_APP_URL}/mcp?key=${secret}`,
+    phoneUrl: `${process.env.SHOPIFY_APP_URL}/s/${secret}`,
+  };
 };
 
 export default function Connect() {
   const { connections } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const url = result && "url" in result ? result.url : null;
+  const phoneUrl = result && "phoneUrl" in result ? result.phoneUrl : null;
 
   return (
     <s-page heading="Connect your AI assistant">
@@ -52,7 +56,7 @@ export default function Connect() {
       </s-section>
 
       {url && (
-        <s-section heading="Your connection link">
+        <s-section heading="Your links">
           <s-banner tone="warning">
             Copy it now; it won't be shown again. Anyone with this link can manage your items, so keep it private.
           </s-banner>
@@ -60,6 +64,16 @@ export default function Connect() {
             <s-text-field label="Link" value={url} readOnly />
             <s-button onClick={() => navigator.clipboard.writeText(url)}>Copy</s-button>
           </s-stack>
+          {phoneUrl && (
+            <>
+              <s-heading>Your phone</s-heading>
+              <s-paragraph>Open this on your phone and add it to your home screen to snap and sell from anywhere.</s-paragraph>
+              <s-stack direction="inline" gap="small" alignItems="end">
+                <s-text-field label="Phone link" value={phoneUrl} readOnly />
+                <s-button onClick={() => navigator.clipboard.writeText(phoneUrl)}>Copy</s-button>
+              </s-stack>
+            </>
+          )}
           <s-heading>Claude</s-heading>
           <s-paragraph>Settings → Connectors → Add custom connector → paste the link.</s-paragraph>
           <s-heading>ChatGPT</s-heading>

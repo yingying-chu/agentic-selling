@@ -210,8 +210,10 @@ export const CHANNELS: Record<ChannelId, ChannelProfile> = {
       electronics: 0.7,
       kids: 0.6,
       other: 0.6,
-      womens_clothing: 0.2,
-      mens_clothing: 0.2,
+      womens_clothing: 0.5,
+      mens_clothing: 0.5,
+      shoes: 0.5,
+      bags: 0.5,
     },
     listingStyle:
       "Local buyers skimming on phones. Plain title of what it is plus brand. Short description: condition, dimensions, pickup/shipping terms.",

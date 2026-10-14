@@ -44,9 +44,9 @@ export async function writeListings(
 
   const response = await claude().beta.messages.parse({
     model: model(),
-    max_tokens: 32000,
+    max_tokens: 16000,
     ...fallbackParams(),
-    output_config: { effort: "medium", format: zodOutputFormat(DraftSchema) },
+    output_config: { effort: "low", format: zodOutputFormat(DraftSchema) },
     system: SYSTEM,
     messages: [
       {

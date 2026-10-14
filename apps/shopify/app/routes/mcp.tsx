@@ -7,6 +7,9 @@ import { INSTRUCTIONS, registerTools } from "../mcp/tools.server";
 
 // MCP endpoint for chat assistants: POST /mcp?key=<secret>.
 
+// Photo tools can take a minute or two.
+export const config = { maxDuration: 300 };
+
 async function handle(request: Request) {
   const shop = await shopForKey(new URL(request.url).searchParams.get("key"));
   if (!shop) {

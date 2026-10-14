@@ -57,7 +57,7 @@ export async function identifyItem(photos: PreparedPhoto[], sellerNotes = ""): P
     model: model(),
     max_tokens: 16000,
     ...fallbackParams(),
-    output_config: { effort: "high", format: zodOutputFormat(ItemFactsSchema) },
+    output_config: { effort: "medium", format: zodOutputFormat(ItemFactsSchema) },
     system: SYSTEM,
     messages: [
       {
