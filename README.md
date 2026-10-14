@@ -12,7 +12,9 @@ Sellie is an agentic selling tool for people clearing out a closet, not running 
 - **Posts for you**: an AI agent (Claude, through Sellie's MCP server and Claude in Chrome) fills in each marketplace's form in your own signed-in browser and publishes it. The item also goes live on your Shopify store.
 - **Keeps one item from selling twice**: Shopify is the inventory record. When the item sells anywhere, its quantity drops to 0 and every other listing is flagged to take down.
 
-Live app: https://sellie-dusky.vercel.app (Shopify app + phone web page + MCP endpoint, on Vercel)
+**Try it on your phone: [https://sellie-dusky.vercel.app/s/sISLse5CkkWFtW5ZgBRS8ATUQ_pct6KF](https://sellie-dusky.vercel.app/s/sISLse5CkkWFtW5ZgBRS8ATUQ_pct6KF)**
+
+The app runs on Vercel: a Shopify app, this phone web page and an MCP endpoint.
 
 **Demo videos**
 - [Sellie demo (YouTube Short)](https://youtube.com/shorts/wWNxYnjX3Fc)
@@ -95,10 +97,10 @@ All calls go through Vercel AI Gateway. The routing table lives in [models.ts](p
 
 ## For judges
 
-You need the **judge link** from our submission (a private phone page, `https://sellie-dusky.vercel.app/s/<key>`). It works like a password to the demo store, so it isn't in this README. Open it on your phone or a desktop browser.
+Open the demo phone link on your phone or a desktop browser: [https://sellie-dusky.vercel.app/s/sISLse5CkkWFtW5ZgBRS8ATUQ_pct6KF](https://sellie-dusky.vercel.app/s/sISLse5CkkWFtW5ZgBRS8ATUQ_pct6KF)
 
 **1. List something (about 2 minutes)**
-1. Open the judge link. Tap **Take photo** or **Choose photos** and add 1–4 photos of anything: a jacket, shoes, a cap, a mouse, a chair. Include the tag if it has one.
+1. Open the demo link. Tap **Take photo** or **Choose photos** and add 1–4 photos of anything: a jacket, shoes, a cap, a mouse, a chair. Include the tag if it has one.
 2. Enter a number under **Least you want to keep after fees** (e.g. 10), then tap **Sell this**.
 3. Watch it work: **What we found** fills in (Claude identifies the item), then **Where it sells best** shows each marketplace with its price and what you'd keep, and the listings are written. In parallel, **Photos** fills with the studio cutout and the AI shots. Any shot that failed the honesty check is listed with the reason.
 
