@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Link, redirect, useLoaderData, useParams } from "react-router";
+import { Form, Link, redirect, useLoaderData, useNavigation, useParams } from "react-router";
 import { phoneContext } from "../phone.server";
 import { STAGE_LABEL } from "../ui";
 
@@ -15,12 +15,19 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       stage: i.stage,
       needsDelist: i.channels.filter((c) => c.status === "needs_delist").length,
     })),
+    demo: process.env.DEMO_MODE === "1",
   };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
   const { store } = await phoneContext(params.key);
   const form = await request.formData();
+  if (form.get("intent") === "reset") {
+    // Demo deployments only: archive (not delete) everything so the next person starts clean.
+    if (process.env.DEMO_MODE !== "1") return { error: "Reset is only available in the demo." };
+    await store.archiveAll();
+    return redirect(`/s/${params.key}`);
+  }
   const files = form.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return { error: "Add at least one photo." };
   const notes = String(form.get("notes") ?? "").trim();
@@ -56,7 +63,9 @@ async function shrink(file: File): Promise<Blob> {
 const MAX_PHOTOS = 10;
 
 export default function PhoneHome() {
-  const { items } = useLoaderData<typeof loader>();
+  const { items, demo } = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  const resetting = navigation.formData?.get("intent") === "reset";
   const { key } = useParams();
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -171,6 +180,20 @@ export default function PhoneHome() {
             </Link>
           ))}
         </div>
+      )}
+
+      {demo && items.length > 0 && (
+        <Form
+          method="post"
+          onSubmit={(e) => {
+            if (!window.confirm("Clear every item for the next person? They're archived in Shopify, not deleted.")) e.preventDefault();
+          }}
+        >
+          <input type="hidden" name="intent" value="reset" />
+          <button className="btn danger block" disabled={resetting}>
+            {resetting ? "Clearing…" : "Reset demo"}
+          </button>
+        </Form>
       )}
     </>
   );

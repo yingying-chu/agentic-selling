@@ -3,7 +3,16 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Link, useFetcher, useLoaderData, useParams, useRevalidator } from "react-router";
 import { CHANNELS, photosForChannel, type ChannelId } from "@agentic-selling/core";
 import { loadItem, makeListingPhotos, phoneContext } from "../phone.server";
-import { confirmDelisted, getSettings, isChannelId, markPosted, markSold, planFor, POST_LINKS } from "../selling.server";
+import {
+  confirmDelisted,
+  getSettings,
+  isChannelId,
+  markPosted,
+  markSold,
+  planFor,
+  POST_LINKS,
+  publishToStore,
+} from "../selling.server";
 import { identifyStep, listingsStep } from "../ai.server";
 import { ROUTES, withTrace } from "@agentic-selling/agents";
 import { money, STAGE_LABEL } from "../ui";
@@ -25,6 +34,10 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     kits,
     processedPhotos: item.photos.some((p) => p.kind !== "original"),
     routes: ROUTES,
+    storefront: {
+      password: process.env.STOREFRONT_PASSWORD || null,
+      testCard: process.env.DEMO_TEST_CARD || "Card number 1 (Shopify's test gateway), any name, any future date, any 3-digit code.",
+    },
   };
 };
 
@@ -62,6 +75,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         await store.saveFloor(item.id, floor);
         const drafts = await traced(() => listingsStep(store, { ...item, floorNet: floor }, settings));
         return { ok: `Priced and wrote ${drafts.length} listings.` };
+      }
+      case "publish": {
+        await publishToStore(store, item);
+        return { ok: "Live on your store." };
       }
       case "posted":
         if (!isChannelId(channel)) break;
@@ -133,7 +150,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 export default function PhoneItem() {
-  const { item, plan, kits, processedPhotos, routes } = useLoaderData<typeof loader>();
+  const { item, plan, kits, processedPhotos, routes, storefront } = useLoaderData<typeof loader>();
   const [simulate, setSimulate] = useState(false);
   useEffect(() => {
     try {
@@ -159,6 +176,10 @@ export default function PhoneItem() {
   const busy = fetcher.state !== "idle";
   const running = busy ? String(fetcher.formData?.get("intent")) : null;
   const photosRunning = photoFetcher.state !== "idle";
+  const storeListing = item.listings.find((l) => l.channel === "shopify") ?? null;
+  const storeState = item.channels.find((c) => c.channel === "shopify") ?? null;
+  const storeLive = storeState?.status === "active";
+  const canPublish = item.stage !== "sold" && Boolean(storeListing) && (!storeState || storeState.status === "draft");
 
   // New item: identify first, then write listings and make photos at the same time.
   useEffect(() => {
@@ -173,7 +194,24 @@ export default function PhoneItem() {
     }
     if (!busy && item.floorNet !== null && item.listings.length === 0) start(fetcher, "listings");
     if (!photosRunning && !processedPhotos) start(photoFetcher, "photos");
-  }, [busy, photosRunning, item.facts, item.floorNet, item.listings.length, processedPhotos, fetcher, photoFetcher]);
+    // Once the listing and photos are ready, put it on the store so it can really be bought.
+    if (!busy && !photosRunning && processedPhotos && canPublish) start(fetcher, "publish");
+  }, [busy, photosRunning, item.facts, item.floorNet, item.listings.length, processedPhotos, canPublish, fetcher, photoFetcher]);
+
+  // While it's on the store, check back often: a buyer's order should show up here within seconds.
+  useEffect(() => {
+    if (!storeLive || item.stage === "sold") return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") revalidator.revalidate();
+    };
+    const timer = setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeLive, item.stage]);
 
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) revalidator.revalidate();
@@ -186,6 +224,7 @@ export default function PhoneItem() {
 
   const facts = item.facts;
   const toDelist = item.channels.filter((c) => c.status === "needs_delist");
+  const soldOn = item.channels.find((c) => c.status === "sold") ?? null;
   const live = item.channels.filter((c) => c.status === "active");
   const result = fetcher.data;
   const photoResult = photoFetcher.data;
@@ -195,6 +234,7 @@ export default function PhoneItem() {
     { label: "Fixing light, then making a stock-quality cover and a model photo (each scored for honesty and quality)", done: processedPhotos, active: photosRunning },
     { label: "Pricing for each platform from your floor", done: Boolean(plan), active: running === "floor" },
     { label: "Writing a listing for each platform", done: kits.length > 0, active: running === "listings" || running === "floor" },
+    { label: "Putting it up for sale on your Shopify store", done: storeLive, active: running === "publish" },
   ];
 
   return (
@@ -208,6 +248,19 @@ export default function PhoneItem() {
       {result && "error" in result && <div className="banner bad">{result.error}</div>}
       {result && "note" in result && <div className="banner ok">{result.note}</div>}
       {photoResult && "error" in photoResult && <div className="banner bad">Photos: {photoResult.error}</div>}
+
+      {soldOn && (
+        <div className="card" style={{ borderColor: "var(--ok)" }}>
+          <h2>
+            Sold on {CHANNELS[soldOn.channel].name}
+            {soldOn.channel === "shopify" && soldOn.externalId ? ` · order ${soldOn.externalId}` : ""}
+          </h2>
+          <p className="muted" style={{ margin: 0 }}>
+            Locked: quantity is now 0, so it can't be bought twice.
+            {toDelist.length === 0 && " Nothing else was posted, so there's nothing to take down."}
+          </p>
+        </div>
+      )}
 
       {toDelist.length > 0 && (
         <div className="card" style={{ borderColor: "var(--bad)" }}>
@@ -251,6 +304,45 @@ export default function PhoneItem() {
                 <div>+ Worth adding: {photoResult.photoNotes.missingShots.join(", ")}</div>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {item.stage !== "sold" && storeListing && (
+        <div className="card">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0 }}>Your Shopify store</h2>
+            <span className={`chip ${storeLive ? "ok" : ""}`}>{storeLive ? "Live" : "Not live yet"}</span>
+          </div>
+          <p className="muted">
+            A real listing anyone can check out on, at <strong>{money(storeListing.price.listPrice)}</strong>.
+          </p>
+          {storeLive && storeState?.url ? (
+            <>
+              <a className="btn primary block" href={storeState.url} target="_blank" rel="noreferrer">
+                Open the store listing
+              </a>
+              {storefront.password && (
+                <div className="row" style={{ marginTop: 10 }}>
+                  <span style={{ flex: 1 }}>
+                    Store password: <strong>{storefront.password}</strong>
+                  </span>
+                  <CopyButton text={storefront.password} label="Copy" />
+                </div>
+              )}
+              <p className="muted" style={{ marginBottom: 0 }}>
+                Try buying it. Pay with the test card: {storefront.testCard} This page updates by itself when the order comes in.
+              </p>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn primary block"
+              disabled={busy || !canPublish}
+              onClick={() => fetcher.submit({ intent: "publish" }, { method: "post" })}
+            >
+              {running === "publish" ? "Publishing…" : "Put it on your store"}
+            </button>
           )}
         </div>
       )}
@@ -371,7 +463,7 @@ export default function PhoneItem() {
         </div>
       )}
 
-      {kits.map(({ listing, photos, disclosure, postUrl, state }) => {
+      {item.stage !== "sold" && kits.map(({ listing, photos, disclosure, postUrl, state }) => {
         const description = [listing.description, disclosure].filter(Boolean).join("\n\n");
         return (
           <div className="card" key={listing.channel}>

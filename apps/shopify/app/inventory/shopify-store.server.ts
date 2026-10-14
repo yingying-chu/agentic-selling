@@ -10,6 +10,7 @@ import {
   type ModelCall,
   type NewPhoto,
   type PhotoKind,
+  type StorefrontListing,
 } from "@agentic-selling/core";
 
 // InventoryStore backed by Shopify: each item is a product, selling data
@@ -36,7 +37,7 @@ const PRODUCT_FIELDS = `#graphql
         id
         ... on MediaImage {
           image {
-            url(transform: { maxWidth: 1024, maxHeight: 1024 })
+            url(transform: { maxWidth: 1600, maxHeight: 1600 })
             altText
           }
         }
@@ -54,6 +55,7 @@ const PRODUCT_FIELDS = `#graphql
     channels: metafield(namespace: "$app", key: "channels") { value }
     photoKinds: metafield(namespace: "$app", key: "photo_kinds") { value }
     aiTrace: metafield(namespace: "$app", key: "ai_trace") { value }
+    notes: metafield(namespace: "$app", key: "notes") { value }
   }
 `;
 
@@ -74,6 +76,7 @@ interface ProductNode {
   channels: { value: string } | null;
   photoKinds: { value: string } | null;
   aiTrace: { value: string } | null;
+  notes: { value: string } | null;
 }
 
 function parseJson<T>(field: { value: string } | null, fallback: T): T {
@@ -113,7 +116,8 @@ export class ShopifyInventoryStore implements InventoryStore {
       ),
       quantity,
       floorNet: floor !== null && Number.isFinite(floor) ? floor : null,
-      notes: p.description.trim() || null,
+      // Publishing replaces the description with the listing, so the seller's words are kept aside first.
+      notes: (p.notes ? p.notes.value : p.description).trim() || null,
       facts: parseJson<ItemFacts | null>(p.facts, null),
       listings: parseJson<ListingDraft[]>(p.listings, []),
       channels: parseJson<ChannelListingState[]>(p.channels, []),
@@ -305,6 +309,127 @@ export class ShopifyInventoryStore implements InventoryStore {
     await this.setMetafield(productId, "photo_kinds", "json", JSON.stringify(kinds));
   }
 
+  /**
+   * Makes the product a live, buyable listing on the Online Store: listing
+   * title, description and price, cover photo first, and no overselling, so
+   * the one in stock can only be bought once.
+   */
+  async publish(id: string, listing: StorefrontListing): Promise<string> {
+    const productId = normalizeProductId(id);
+    const current = await this.gql<{
+      product: {
+        description: string;
+        handle: string;
+        notes: { value: string } | null;
+        variants: { nodes: Array<{ id: string }> };
+        media: { nodes: Array<{ id: string; image?: { url: string } }> };
+      } | null;
+      publications: { nodes: Array<{ id: string; name: string | null; catalog: { title: string } | null }> };
+    }>(
+      `#graphql
+        query ForPublish($id: ID!) {
+          product(id: $id) {
+            description
+            handle
+            notes: metafield(namespace: "$app", key: "notes") { value }
+            variants(first: 1) { nodes { id } }
+            media(first: 30) { nodes { id ... on MediaImage { image { url(transform: { maxWidth: 1600, maxHeight: 1600 }) } } } }
+          }
+          publications(first: 25) { nodes { id name catalog { title } } }
+        }`,
+      { id: productId },
+    );
+    const product = current.product;
+    if (!product) throw new Error("Item not found.");
+    const onlineStore = current.publications.nodes.find((p) => /online store/i.test(p.catalog?.title ?? p.name ?? ""));
+    if (!onlineStore) throw new Error("This store has no Online Store sales channel to publish to.");
+
+    if (!product.notes && product.description.trim()) {
+      await this.setMetafield(productId, "notes", "multi_line_text_field", product.description.trim());
+    }
+
+    const updated = await this.gql<{ productUpdate: { userErrors: Array<{ message: string }> } }>(
+      `#graphql
+        mutation Publish($product: ProductUpdateInput!) {
+          productUpdate(product: $product) { userErrors { field message } }
+        }`,
+      { product: { id: productId, title: listing.title, descriptionHtml: toHtml(listing.description), status: "ACTIVE" } },
+    );
+    if (updated.productUpdate.userErrors.length) {
+      throw new Error(`Couldn't update the product: ${updated.productUpdate.userErrors.map((e) => e.message).join("; ")}`);
+    }
+
+    const variant = product.variants.nodes[0];
+    if (variant) {
+      const priced = await this.gql<{ productVariantsBulkUpdate: { userErrors: Array<{ message: string }> } }>(
+        `#graphql
+          mutation Price($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+            productVariantsBulkUpdate(productId: $productId, variants: $variants) { userErrors { field message } }
+          }`,
+        { productId, variants: [{ id: variant.id, price: listing.price.toFixed(2), inventoryPolicy: "DENY" }] },
+      );
+      const errors = priced.productVariantsBulkUpdate.userErrors;
+      if (errors.length) throw new Error(`Couldn't set the price: ${errors.map((e) => e.message).join("; ")}`);
+    }
+
+    const byUrl = new Map(product.media.nodes.flatMap((m) => (m.image ? [[m.image.url, m.id] as const] : [])));
+    const moves = listing.photoUrls
+      .map((url) => byUrl.get(url))
+      .filter((mediaId): mediaId is string => Boolean(mediaId))
+      .map((mediaId, i) => ({ id: mediaId, newPosition: String(i) }));
+    if (moves.length) {
+      // Best effort: a failed reorder still leaves a sellable listing.
+      await this.gql(
+        `#graphql
+          mutation Order($id: ID!, $moves: [MoveInput!]!) { productReorderMedia(id: $id, moves: $moves) { mediaUserErrors { message } } }`,
+        { id: productId, moves },
+      ).catch(() => {});
+    }
+
+    const published = await this.gql<{ publishablePublish: { userErrors: Array<{ message: string }> } }>(
+      `#graphql
+        mutation ToStore($id: ID!, $input: [PublicationInput!]!) {
+          publishablePublish(id: $id, input: $input) { userErrors { field message } }
+        }`,
+      { id: productId, input: [{ publicationId: onlineStore.id }] },
+    );
+    const errors = published.publishablePublish.userErrors;
+    if (errors.length) throw new Error(`Couldn't publish to the store: ${errors.map((e) => e.message).join("; ")}`);
+
+    const link = await this.gql<{ product: { onlineStoreUrl: string | null; handle: string } | null }>(
+      `#graphql
+        query Link($id: ID!) { product(id: $id) { onlineStoreUrl handle } }`,
+      { id: productId },
+    );
+    return link.product?.onlineStoreUrl ?? `https://${this.shop}/products/${link.product?.handle ?? product.handle}`;
+  }
+
+  /** Archives every item that isn't archived yet (demo reset). Archived products leave the store and the item list. */
+  async archiveAll(): Promise<number> {
+    let count = 0;
+    for (let page = 0; page < 10; page++) {
+      const data = await this.gql<{ products: { nodes: Array<{ id: string }> } }>(
+        `#graphql
+          query Open { products(first: 50, query: "-status:archived") { nodes { id } } }`,
+      );
+      const ids = data.products.nodes.map((p) => p.id);
+      if (!ids.length) break;
+      const results = await Promise.all(
+        ids.map((id) =>
+          this.gql<{ productUpdate: { userErrors: Array<{ message: string }> } }>(
+            `#graphql
+              mutation Archive($product: ProductUpdateInput!) { productUpdate(product: $product) { userErrors { message } } }`,
+            { product: { id, status: "ARCHIVED" } },
+          ),
+        ),
+      );
+      const failed = results.flatMap((r) => r.productUpdate.userErrors.map((e) => e.message));
+      if (failed.length) throw new Error(`Couldn't clear some items: ${failed[0]}`);
+      count += ids.length;
+    }
+    return count;
+  }
+
   /** Tracks inventory and sets the quantity at the item's first location. */
   async setQuantity(id: string, quantity: number, from?: number) {
     const productId = normalizeProductId(id);
@@ -459,6 +584,15 @@ export class ShopifyInventoryStore implements InventoryStore {
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** Plain listing text to product HTML: blank lines split paragraphs, single newlines become line breaks. */
+const toHtml = (text: string) =>
+  text
+    .split(/\n\s*\n/)
+    .map((para) => para.trim())
+    .filter(Boolean)
+    .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
+    .join("");
 
 /** Accepts a full GID or the numeric ID that's easier for people and assistants to pass around. */
 export function normalizeProductId(id: string): string {

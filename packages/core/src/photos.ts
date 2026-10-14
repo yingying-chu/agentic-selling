@@ -63,6 +63,9 @@ export interface ListingPhoto {
   sourceUrl?: string;
 }
 
+/** Same image regardless of size variant or cache-buster (Shopify CDN: name_1600x1600.jpg?v=...). */
+const imageKey = (url: string) => url.split("?")[0]!.replace(/_\d+x\d*(?=\.\w+$)/, "");
+
 const ORDER: Record<PhotoKind, number> = { studio: 0, enhanced: 1, original: 2, ai_regenerated: 3, ai_model: 4 };
 /** Where an AI product shot may lead: right after a studio shot, before real photos. */
 const ORDER_AI_COVER: Record<PhotoKind, number> = { ...ORDER, ai_regenerated: 0.5 };
@@ -79,9 +82,9 @@ export function photosForChannel(
   channel: ChannelId,
 ): { photos: ListingPhoto[]; disclosure: string | null } {
   const policy = PHOTO_POLICY[channel];
-  const replaced = new Set(photos.filter((p) => p.kind === "enhanced" && p.sourceUrl).map((p) => p.sourceUrl));
+  const replaced = new Set(photos.filter((p) => p.kind === "enhanced" && p.sourceUrl).map((p) => imageKey(p.sourceUrl!)));
   const kept = photos.filter((p) => {
-    if (p.kind === "original" && replaced.has(p.url)) return false;
+    if (p.kind === "original" && replaced.has(imageKey(p.url))) return false;
     if (AI_GENERATED_KINDS.includes(p.kind) && !policy.aiGeneratedAsExtra) return false;
     if (p.kind === "studio" && !policy.studioCover) return false;
     return true;

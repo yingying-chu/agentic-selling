@@ -36,3 +36,11 @@ test("AI product shot can lead where allowed, real photo right after", () => {
   assert.deepEqual(photosForChannel(set, "poshmark").photos.map((p) => p.url), ["r1", "e1"]);
   assert.deepEqual(photosForChannel(set, "vinted").photos.map((p) => p.url), ["e1"]);
 });
+
+test("a corrected photo replaces its original across CDN size variants", () => {
+  const set: ListingPhoto[] = [
+    { url: "https://cdn/x/photo-1_1600x1600.jpg?v=2", kind: "original", alt: null },
+    { url: "https://cdn/x/fixed_1600x1600.jpg?v=3", kind: "enhanced", alt: null, sourceUrl: "https://cdn/x/photo-1_1024x1024.jpg?v=1" },
+  ];
+  assert.deepEqual(photosForChannel(set, "vinted").photos.map((p) => p.kind), ["enhanced"]);
+});

@@ -58,7 +58,7 @@ export interface ChannelProfile {
 export const CHANNELS: Record<ChannelId, ChannelProfile> = {
   shopify: {
     id: "shopify",
-    name: "Shopify (source of truth)",
+    name: "Shopify store",
     integration: "api",
     titleMaxLength: 255,
     descriptionMaxLength: 20000,

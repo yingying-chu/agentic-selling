@@ -17,6 +17,7 @@ import {
   markSold,
   planFor,
   POST_LINKS,
+  publishToStore,
   saveListingTexts,
   updateSettings,
 } from "../selling.server";
@@ -34,8 +35,9 @@ Typical flow:
 4. plan_item for each platform's price and the recommended platforms. Explain briefly, in plain words.
 5. get_listing_guide for the recommended platforms, write a listing for each following its rules, then save_listings.
 6. improve_photos once per item for listing-ready photos (corrected, studio cover, AI model shot; every edit is checked against the originals).
-7. To post: get_posting_kit for the platform. If you can control the seller's browser (e.g. Claude in Chrome), open the kit's postUrl in their logged-in session, fill every field from the kit, attach the photos, and stop before the final Post/Publish button so the seller confirms. Never log in for them or type their password. Otherwise hand them the kit to copy. Afterwards mark_posted with the listing link.
-8. When something sells: mark_sold right away. If they have more than one, it takes one off and every listing stays up; otherwise it locks the item so it can't sell twice, and you walk them through taking down each remaining listing and confirm_delisted for each.
+7. publish_to_store puts the item on the seller's own Shopify store as a real, buyable listing. Store orders mark the item sold automatically.
+8. To post elsewhere: get_posting_kit for the platform. If you can control the seller's browser (e.g. Claude in Chrome), open the kit's postUrl in their logged-in session, fill every field from the kit, attach the photos, and stop before the final Post/Publish button so the seller confirms. Never log in for them or type their password. Otherwise hand them the kit to copy. Afterwards mark_posted with the listing link.
+9. When something sells on another platform: mark_sold right away. If they have more than one, it takes one off and every listing stays up; otherwise it locks the item so it can't sell twice, and you walk them through taking down each remaining listing and confirm_delisted for each.
 
 Be honest in listings: never invent brand, material, or measurements, and always disclose flaws. Never tell the seller to accept an offer below the plan's minimum.`;
 
@@ -280,6 +282,21 @@ export function registerTools(server: McpServer, store: InventoryStore, shop: st
         offers: { acceptFrom: listing.price.minAcceptPrice, neverBelow: listing.price.minAcceptPrice },
         afterPosting: "Call mark_posted with the listing URL.",
       });
+    },
+  );
+
+  server.registerTool(
+    "publish_to_store",
+    {
+      title: "Publish to store",
+      description:
+        "Put the item up for sale on the seller's own Shopify store, using the Shopify listing from save_listings. Returns the buyer-facing link. A store order locks the item and flags other listings automatically.",
+      inputSchema: z.object({ item_id: itemId }),
+    },
+    async ({ item_id }) => {
+      const item = await load(item_id);
+      const url = await publishToStore(store, item);
+      return text(`Live on the store: ${url}`);
     },
   );
 

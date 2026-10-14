@@ -2,6 +2,7 @@ import {
   CHANNELS,
   CHANNEL_IDS,
   fitText,
+  photosForChannel,
   planItem,
   recordSale,
   upsertChannelState,
@@ -10,6 +11,7 @@ import {
   type InventoryStore,
   type ItemPlan,
   type ListingDraft,
+  type SaleResult,
 } from "@agentic-selling/core";
 import db from "./db.server";
 
@@ -115,6 +117,43 @@ export async function markPosted(store: InventoryStore, item: InventoryItem, cha
 
 export async function markSold(store: InventoryStore, item: InventoryItem, channel: ChannelId) {
   return recordSale(store, item.id, channel);
+}
+
+/** Puts the item on the seller's own Shopify store as a real, buyable listing and marks it live there. */
+export async function publishToStore(store: InventoryStore, item: InventoryItem) {
+  if (!store.publish) throw new Error("This store has no storefront to publish to.");
+  if (item.stage === "sold") throw new Error("This item already sold.");
+  const listing = item.listings.find((l) => l.channel === "shopify");
+  if (!listing) throw new Error("Write the listings first; the store listing comes from them.");
+  const { photos, disclosure } = photosForChannel(item.photos, "shopify");
+  const url = await store.publish(item.id, {
+    title: listing.title,
+    description: [listing.description, disclosure].filter(Boolean).join("\n\n"),
+    price: listing.price.listPrice,
+    photoUrls: photos.map((p) => p.url),
+  });
+  await markPosted(store, item, "shopify", url);
+  return url;
+}
+
+/**
+ * A buyer checked out on the store. Locks the item and flags the other
+ * listings, once per item: webhook retries and items we never put on the
+ * store are ignored. Shopify has already taken what was bought off the
+ * quantity, so if the seller has any left, every listing stays up.
+ */
+export async function recordStoreSale(store: InventoryStore, productId: string, orderName?: string): Promise<SaleResult | null> {
+  const item = await store.getItem(productId);
+  if (!item) return null;
+  const onStore = item.channels.find((c) => c.channel === "shopify");
+  if (onStore?.status !== "active" || item.channels.some((c) => c.status === "sold")) return null;
+  if (item.quantity !== null && item.quantity > 0) return { item, toDelist: [], left: item.quantity };
+  const sale = await recordSale(store, item.id, "shopify");
+  if (orderName) {
+    const states = upsertChannelState(sale.item.channels, { channel: "shopify", status: "sold", externalId: orderName }, new Date().toISOString());
+    await store.saveChannelStates(item.id, states);
+  }
+  return sale;
 }
 
 export async function confirmDelisted(store: InventoryStore, item: InventoryItem, channel: ChannelId) {
