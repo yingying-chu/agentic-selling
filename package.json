@@ -1,0 +1,16 @@
+{
+  "name": "agentic-selling",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test packages/*/test/",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "intake": "node --env-file-if-exists=.env packages/agents/src/cli/intake.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@agentic-selling/agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@agentic-selling/core": "*",
+    "@anthropic-ai/sdk": "^0.115.0",
+    "sharp": "^0.35.0",
+    "zod": "^4.0.0"
+  }
+}
