@@ -223,7 +223,7 @@ export class ShopifyInventoryStore implements InventoryStore {
     return targets.map((t) => t.resourceUrl);
   }
 
-  async createItem(title: string, photos: NewPhoto[], notes?: string): Promise<string> {
+  async createItem(title: string, photos: NewPhoto[], notes?: string, quantity = 1): Promise<string> {
     const sources = await this.stage(photos);
     const data = await this.gql<{
       productCreate: {
@@ -245,7 +245,7 @@ export class ShopifyInventoryStore implements InventoryStore {
     );
     const product = data.productCreate.product;
     if (!product) throw new Error(`Couldn't create item: ${data.productCreate.userErrors.map((e) => e.message).join("; ")}`);
-    await this.setQuantity(product.id, 1);
+    await this.setQuantity(product.id, quantity);
     return product.id;
   }
 
@@ -306,7 +306,8 @@ export class ShopifyInventoryStore implements InventoryStore {
   }
 
   /** Tracks inventory and sets the quantity at the item's first location. */
-  private async setQuantity(productId: string, quantity: number) {
+  async setQuantity(id: string, quantity: number, from?: number) {
+    const productId = normalizeProductId(id);
     type Item = {
       product: {
         variants: {
@@ -350,7 +351,7 @@ export class ShopifyInventoryStore implements InventoryStore {
     }
     const level = item?.inventoryLevels.nodes[0];
     if (!item || !level) return;
-    await this.gql(
+    const res = await this.gql<{ inventorySetQuantities: { userErrors: Array<{ message: string }> } }>(
       `#graphql
         mutation SetQty($input: InventorySetQuantitiesInput!, $key: String!) {
           inventorySetQuantities(input: $input) @idempotent(key: $key) { userErrors { code field message } }
@@ -360,12 +361,19 @@ export class ShopifyInventoryStore implements InventoryStore {
           name: "available",
           reason: "correction",
           quantities: [
-            { inventoryItemId: item.id, locationId: level.location.id, quantity, changeFromQuantity: level.quantities[0]?.quantity ?? 0 },
+            {
+              inventoryItemId: item.id,
+              locationId: level.location.id,
+              quantity,
+              changeFromQuantity: from ?? level.quantities[0]?.quantity ?? 0,
+            },
           ],
         },
         key: randomUUID(),
       },
     );
+    const errors = res.inventorySetQuantities.userErrors;
+    if (errors.length) throw new Error(`Couldn't update quantity: ${errors.map((e) => e.message).join("; ")}`);
   }
 
   async zeroQuantity(id: string) {

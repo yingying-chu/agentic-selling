@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Link, redirect, useLoaderData, useParams } from "react-router";
 import { phoneContext } from "../phone.server";
@@ -25,6 +25,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   if (!files.length) return { error: "Add at least one photo." };
   const notes = String(form.get("notes") ?? "").trim();
   const floor = Number(form.get("floor"));
+  const quantity = Math.min(99, Math.max(1, Math.floor(Number(form.get("quantity")) || 1)));
 
   const photos = await Promise.all(
     files.slice(0, 10).map(async (f, i) => ({
@@ -34,7 +35,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       kind: "original" as const,
     })),
   );
-  const id = await store.createItem("New item", photos, notes || undefined);
+  const id = await store.createItem("New item", photos, notes || undefined, quantity);
   if (Number.isFinite(floor) && floor > 0) await store.saveFloor(id, floor);
   return redirect(`/s/${params.key}/items/${id.split("/").pop()}?new=1`);
 };
@@ -52,12 +53,27 @@ async function shrink(file: File): Promise<Blob> {
   );
 }
 
+const MAX_PHOTOS = 10;
+
 export default function PhoneHome() {
   const { items } = useLoaderData<typeof loader>();
   const { key } = useParams();
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const library = useRef<HTMLInputElement>(null);
+  const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
+
+  // Each camera shot or library pick adds to the set, so the seller can mix both.
+  function add(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    const next = [...files, ...picked];
+    setError(next.length > MAX_PHOTOS ? `Kept the first ${MAX_PHOTOS} photos.` : null);
+    setFiles(next.slice(0, MAX_PHOTOS));
+  }
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,7 +82,6 @@ export default function PhoneHome() {
     setError(null);
     try {
       const form = new FormData(e.currentTarget);
-      form.delete("photos");
       for (const [i, f] of files.entries()) form.append("photos", await shrink(f), `photo-${i}.jpg`);
       const res = await fetch(`/s/${key}?index`, { method: "POST", body: form, redirect: "follow" });
       if (res.redirected) window.location.href = res.url;
@@ -84,22 +99,50 @@ export default function PhoneHome() {
         <h1>Add an item</h1>
         <p className="muted">Front, back, the tag, and any flaws. Any light is fine; we'll fix it.</p>
         <form onSubmit={submit}>
-          <label htmlFor="photos">Photos</label>
-          <input
-            id="photos"
-            name="photos"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-          />
+          <label>
+            Photos{files.length > 0 && <span className="muted"> · {files.length} of {MAX_PHOTOS}</span>}
+          </label>
+          <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={add} />
+          <input ref={library} type="file" accept="image/*" multiple hidden onChange={add} />
+          <div className="row">
+            <button
+              type="button"
+              className="btn"
+              style={{ flex: 1 }}
+              disabled={files.length >= MAX_PHOTOS}
+              onClick={() => camera.current?.click()}
+            >
+              {files.length ? "Take another" : "Take photo"}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              style={{ flex: 1 }}
+              disabled={files.length >= MAX_PHOTOS}
+              onClick={() => library.current?.click()}
+            >
+              Choose photos
+            </button>
+          </div>
           {files.length > 0 && (
             <div className="grid" style={{ marginTop: 8 }}>
-              {files.map((f) => (
-                <img key={f.name + f.size} src={URL.createObjectURL(f)} alt="" />
+              {files.map((f, i) => (
+                <div className="tile" key={previews[i]}>
+                  <img src={previews[i]} alt={`Photo ${i + 1}`} />
+                  <button
+                    type="button"
+                    className="remove"
+                    aria-label={`Remove photo ${i + 1}`}
+                    onClick={() => setFiles(files.filter((x) => x !== f))}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
           )}
+          <label htmlFor="quantity">How many do you have?</label>
+          <input id="quantity" name="quantity" type="number" inputMode="numeric" min={1} max={99} step={1} defaultValue={1} />
           <label htmlFor="floor">Least you want to keep after fees ($)</label>
           <input id="floor" name="floor" type="number" inputMode="decimal" min={1} placeholder="e.g. 25" />
           <label htmlFor="notes">Anything the photos don't show? (optional)</label>

@@ -69,8 +69,18 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         return { ok: `Marked live on ${CHANNELS[channel].name}.` };
       case "sold": {
         if (!isChannelId(channel)) break;
-        const { toDelist } = await markSold(store, item, channel);
+        const { toDelist, left } = await markSold(store, item, channel);
+        if (left > 0) {
+          const note = `Sold one. ${left} left, so your listings stay up. Lower the quantity on them to ${left} where there is one.`;
+          return { ok: note, note };
+        }
         return { ok: toDelist.length ? "Sold and locked. Take the others down below." : "Sold and locked." };
+      }
+      case "quantity": {
+        const quantity = Number(form.get("quantity"));
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) return { error: "Enter how many you have, 1 to 99." };
+        await store.setQuantity(item.id, quantity);
+        return { ok: quantity > 1 ? `${quantity} on hand.` : "1 on hand." };
       }
       case "delisted":
         if (!isChannelId(channel)) break;
@@ -196,6 +206,7 @@ export default function PhoneItem() {
       <span className="chip">{STAGE_LABEL[item.stage].label}</span>
 
       {result && "error" in result && <div className="banner bad">{result.error}</div>}
+      {result && "note" in result && <div className="banner ok">{result.note}</div>}
       {photoResult && "error" in photoResult && <div className="banner bad">Photos: {photoResult.error}</div>}
 
       {toDelist.length > 0 && (
@@ -291,6 +302,29 @@ export default function PhoneItem() {
             </div>
           )}
         </div>
+      )}
+
+      {item.stage !== "sold" && item.quantity !== null && (
+        <fetcher.Form method="post" className="card row" key={item.quantity}>
+          <input type="hidden" name="intent" value="quantity" />
+          <label htmlFor="quantity" style={{ margin: 0, flex: 1 }}>
+            How many you have
+          </label>
+          <input
+            id="quantity"
+            name="quantity"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={99}
+            step={1}
+            defaultValue={item.quantity}
+            style={{ width: 80 }}
+          />
+          <button className="btn" disabled={running === "quantity"}>
+            Save
+          </button>
+        </fetcher.Form>
       )}
 
       {facts && item.floorNet === null && (
@@ -442,7 +476,11 @@ export default function PhoneItem() {
       {item.stage !== "sold" && live.length > 0 && (
         <div className="card">
           <h2>Sold it?</h2>
-          <p className="muted">Tap where it sold. We lock it and list what to take down.</p>
+          <p className="muted">
+            {(item.quantity ?? 1) > 1
+              ? `Tap where it sold. You have ${item.quantity}, so we take one off and your listings stay up.`
+              : "Tap where it sold. We lock it and list what to take down."}
+          </p>
           <div className="row">
             {live.map((c) => (
               <fetcher.Form method="post" key={c.channel}>

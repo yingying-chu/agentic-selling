@@ -35,7 +35,7 @@ Typical flow:
 5. get_listing_guide for the recommended platforms, write a listing for each following its rules, then save_listings.
 6. improve_photos once per item for listing-ready photos (corrected, studio cover, AI model shot; every edit is checked against the originals).
 7. To post: get_posting_kit for the platform. If you can control the seller's browser (e.g. Claude in Chrome), open the kit's postUrl in their logged-in session, fill every field from the kit, attach the photos, and stop before the final Post/Publish button so the seller confirms. Never log in for them or type their password. Otherwise hand them the kit to copy. Afterwards mark_posted with the listing link.
-8. When something sells: mark_sold right away (this locks the item so it can't sell twice), then walk them through taking down each remaining listing and confirm_delisted for each.
+8. When something sells: mark_sold right away. If they have more than one, it takes one off and every listing stays up; otherwise it locks the item so it can't sell twice, and you walk them through taking down each remaining listing and confirm_delisted for each.
 
 Be honest in listings: never invent brand, material, or measurements, and always disclose flaws. Never tell the seller to accept an offer below the plan's minimum.`;
 
@@ -53,6 +53,7 @@ function summary(i: InventoryItem) {
     stage: i.stage,
     photos: i.photos.length,
     floor: i.floorNet,
+    quantity: i.quantity,
     channels: i.channels.map((c) => `${c.channel}:${c.status}`),
   };
 }
@@ -273,6 +274,7 @@ export function registerTools(server: McpServer, store: InventoryStore, shop: st
           colors: f?.colors,
           materials: f?.materials,
           tags: listing.tags,
+          quantity: item.quantity ?? 1,
         },
         photos: photos.map((p) => ({ url: p.url, kind: p.kind })),
         offers: { acceptFrom: listing.price.minAcceptPrice, neverBelow: listing.price.minAcceptPrice },
@@ -300,12 +302,17 @@ export function registerTools(server: McpServer, store: InventoryStore, shop: st
     {
       title: "Mark sold",
       description:
-        "Call as soon as the item sells anywhere. Locks it (quantity 0) and returns every other listing the seller must take down.",
+        "Call as soon as the item sells anywhere. If the seller has more than one, takes one off and keeps every listing up. Otherwise locks it (quantity 0) and returns every other listing the seller must take down.",
       inputSchema: z.object({ item_id: itemId, channel: channel.describe("Where it sold") }),
     },
     async ({ item_id, channel }) => {
       const item = await load(item_id);
-      const { toDelist } = await markSold(store, item, channel);
+      const { toDelist, left } = await markSold(store, item, channel);
+      if (left > 0) {
+        return text(
+          `Sold one on ${CHANNELS[channel].name}; ${left} left, so every listing stays up. Where a platform shows a quantity, the seller should lower it to ${left}.`,
+        );
+      }
       if (!toDelist.length) return text(`Marked sold on ${CHANNELS[channel].name}. No other listings to take down.`);
       return json(
         `Marked sold on ${CHANNELS[channel].name} and locked. The seller must take these down now, or someone else may buy it:`,

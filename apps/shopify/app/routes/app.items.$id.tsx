@@ -60,7 +60,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         return { ok: `Marked live on ${CHANNELS[channel].name}.` };
       case "sold": {
         if (!isChannelId(channel)) break;
-        const { toDelist } = await markSold(store, item, channel);
+        const { toDelist, left } = await markSold(store, item, channel);
+        if (left > 0) return { ok: `Sold one. ${left} left, so your listings stay up.` };
         return {
           ok: toDelist.length
             ? `Sold and locked. Take down: ${toDelist.map((d) => d.name).join(", ")}.`

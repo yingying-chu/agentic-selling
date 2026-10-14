@@ -66,5 +66,28 @@ test("recordSale zeroes quantity before touching channel states", async () => {
   } as unknown as InventoryStore;
   const res = await recordSale(store, "1", "poshmark");
   assert.deepEqual(calls, ["zero", "states"]);
+  assert.equal(res.left, 0);
   assert.deepEqual(res.toDelist.map((d) => [d.channel, d.url]), [["mercari", "https://mercari.com/x"]]);
+});
+
+test("recordSale with more than one on hand sells one and keeps every listing up", async () => {
+  const calls: unknown[] = [];
+  const item: InventoryItem = {
+    id: "1", title: "Tee", photos: [], quantity: 2, floorNet: 10, notes: null, facts: null, listings: [], aiTrace: [],
+    channels: [
+      { channel: "poshmark", status: "active", updatedAt: t },
+      { channel: "mercari", status: "active", updatedAt: t },
+    ],
+    stage: "listed", createdAt: t, updatedAt: t,
+  };
+  const store = {
+    getItem: async () => item,
+    setQuantity: async (...args: unknown[]) => void calls.push(["set", ...args]),
+    zeroQuantity: async () => void calls.push("zero"),
+    saveChannelStates: async () => void calls.push("states"),
+  } as unknown as InventoryStore;
+  const res = await recordSale(store, "1", "poshmark");
+  assert.deepEqual(calls, [["set", "1", 1, 2]]);
+  assert.equal(res.left, 1);
+  assert.deepEqual(res.toDelist, []);
 });

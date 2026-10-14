@@ -61,8 +61,13 @@ export interface InventoryStore {
   saveChannelStates(id: string, states: ChannelListingState[]): Promise<void>;
   /** Sets on-hand quantity to zero so the item can't sell twice. */
   zeroQuantity(id: string): Promise<void>;
-  /** Creates a new item (quantity 1) from the seller's photos; returns its ID. */
-  createItem(title: string, photos: NewPhoto[], notes?: string): Promise<string>;
+  /** Creates a new item from the seller's photos (quantity defaults to 1); returns its ID. */
+  createItem(title: string, photos: NewPhoto[], notes?: string, quantity?: number): Promise<string>;
+  /**
+   * Sets on-hand quantity. With `from`, it's compare-and-set: fails if the
+   * quantity is no longer `from` (someone else changed it, e.g. another sale).
+   */
+  setQuantity(id: string, quantity: number, from?: number): Promise<void>;
   renameItem(id: string, title: string): Promise<void>;
   /** Appends AI calls to the item's trace (keeps the most recent ones). */
   appendTrace(id: string, calls: ModelCall[]): Promise<void>;
@@ -105,12 +110,24 @@ export interface SaleResult {
   item: InventoryItem;
   /** Listings the seller still has to take down, with links where we have them. */
   toDelist: Array<{ channel: ChannelId; name: string; url?: string; automatic: boolean }>;
+  /** How many the seller still has. Above 0, every listing stays up. */
+  left: number;
 }
 
-/** Records a sale: zeroes quantity first (the lock), then updates every channel's state. */
+/**
+ * Records a sale. If the seller has more than one, it takes one off and leaves
+ * every listing up. Otherwise it zeroes quantity first (the lock), then updates
+ * every channel's state.
+ */
 export async function recordSale(store: InventoryStore, id: string, soldOn: ChannelId): Promise<SaleResult> {
   const item = await store.getItem(id);
   if (!item) throw new Error(`Item ${id} not found`);
+
+  if (item.quantity !== null && item.quantity > 1) {
+    const left = item.quantity - 1;
+    await store.setQuantity(id, left, item.quantity);
+    return { item: { ...item, quantity: left }, toDelist: [], left };
+  }
 
   await store.zeroQuantity(id);
   const states = applySale(item.channels, soldOn, new Date().toISOString());
@@ -126,5 +143,5 @@ export async function recordSale(store: InventoryStore, id: string, soldOn: Chan
       automatic: false,
     }));
   const updated = { ...item, quantity: 0, channels: states, stage: "sold" as const };
-  return { item: updated, toDelist };
+  return { item: updated, toDelist, left: 0 };
 }

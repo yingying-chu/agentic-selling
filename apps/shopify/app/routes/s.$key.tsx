@@ -40,6 +40,7 @@ h2 { font-size: 17px; margin: 0 0 8px; }
 .chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); }
 .tile { position: relative; }
 .tile .chip { position:absolute; left:6px; bottom:6px; background: rgba(0,0,0,.65); color:#fff; }
+.tile .remove { position:absolute; top:4px; right:4px; width:28px; height:28px; border-radius:999px; border:0; background: rgba(0,0,0,.65); color:#fff; font-size:18px; line-height:1; cursor:pointer; }
 .item { display:flex; gap:12px; align-items:center; color:inherit; text-decoration:none; }
 .item img { width:64px; height:64px; object-fit:cover; border-radius:12px; background: var(--chip); flex: none; }
 table { width:100%; border-collapse: collapse; font-size: 14px; }
