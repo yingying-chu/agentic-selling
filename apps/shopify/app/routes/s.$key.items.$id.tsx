@@ -12,6 +12,8 @@ import {
   planFor,
   POST_LINKS,
   publishToStore,
+  recordStoreSale,
+  soldOnStore,
 } from "../selling.server";
 import { identifyStep, listingsStep } from "../ai.server";
 import { ROUTES, withTrace } from "@agentic-selling/agents";
@@ -19,7 +21,9 @@ import { money, STAGE_LABEL } from "../ui";
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
   const { store, shop } = await phoneContext(params.key);
-  const item = await loadItem(store, params.id!);
+  let item = await loadItem(store, params.id!);
+  // A store checkout shows up here even if Shopify's stock notification hasn't arrived yet.
+  if (soldOnStore(item) && (await recordStoreSale(store, item.id))) item = await loadItem(store, params.id!);
   const plan = planFor(item, await getSettings(shop));
   const listed = "missing" in plan ? [] : plan.selected;
   const kits = item.listings
@@ -251,10 +255,7 @@ export default function PhoneItem() {
 
       {soldOn && (
         <div className="card" style={{ borderColor: "var(--ok)" }}>
-          <h2>
-            Sold on {CHANNELS[soldOn.channel].name}
-            {soldOn.channel === "shopify" && soldOn.externalId ? ` · order ${soldOn.externalId}` : ""}
-          </h2>
+          <h2>Sold on {CHANNELS[soldOn.channel].name}</h2>
           <p className="muted" style={{ margin: 0 }}>
             Locked: quantity is now 0, so it can't be bought twice.
             {toDelist.length === 0 && " Nothing else was posted, so there's nothing to take down."}

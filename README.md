@@ -24,7 +24,7 @@ Take photos → your assistant (Claude, ChatGPT…) or the Shopify app identifie
 - **Inventory lock:** each item is a product with quantity 1 unless the seller says they have more. A sale with more on hand takes one off and leaves every listing up. Selling the last one sets quantity to 0 first, then flags every other live listing as "take this down".
 - **Pricing:** worked backward from the seller's take-home floor per marketplace, covering fees, who pays shipping, and the discount buyers there usually expect ([pricing.ts](packages/core/src/pricing.ts)). Fees in [fees.ts](packages/core/src/fees.ts) are dated estimates.
 - **Routing:** fixed rules pick marketplaces by category fit and whether the item can clear the floor there ([routing.ts](packages/core/src/routing.ts)).
-- **Posting:** the item goes live on the seller's own Shopify store as a real, buyable listing (sell-once: inventory policy "deny"). A store order arrives as an `orders/create` webhook and runs the same sale lock as a manual "Sold". For Poshmark, Mercari, Depop, Vinted, Grailed and FB, v1 hands the seller copy-ready listings with links. eBay API posting is next.
+- **Posting:** the item goes live on the seller's own Shopify store as a real, buyable listing (sell-once: inventory policy "deny"). A store checkout takes the one unit in stock; the `inventory_levels/update` webhook (and the phone page, as a backup) sees it and runs the same sale lock as a manual "Sold". No order or customer data is read. For Poshmark, Mercari, Depop, Vinted, Grailed and FB, v1 hands the seller copy-ready listings with links. eBay API posting is next.
 
 ## Models, routing and fallbacks (Vercel AI Gateway)
 
@@ -81,10 +81,9 @@ Judges only need the phone link (`/s/<key>`, from **Connect AI** in the app). Th
 
 One-time setup on the dev store:
 
-1. In the Partner Dashboard, under the app's **API access → Protected customer data**, request access for order data (no review needed for development stores). `orders/create` can't be subscribed to without it.
-2. `shopify app deploy`, then open the app once in the store admin to approve the new scopes (`read_orders`, `write_publications`).
-3. Turn on test payments (**Settings → Payments**: Shopify's Bogus Gateway, or Shopify Payments in test mode). If you use Shopify Payments, set `DEMO_TEST_CARD` to its test card.
-4. On Vercel, set `DEMO_MODE=1` (shows **Reset demo**, which archives every product in the store) and `STOREFRONT_PASSWORD` (the dev store's storefront password, shown next to the store link).
+1. `shopify app deploy`, then open the app once in the store admin to approve the new scope (`write_publications`).
+2. Turn on test payments (**Settings → Payments**: Shopify's Bogus Gateway, or Shopify Payments in test mode). If you use Shopify Payments, set `DEMO_TEST_CARD` to its test card.
+3. In **Connect AI**, make two links: one for judges, one for you. On Vercel, set `DEMO_PRESENTER_KEY` to your link's key (only that link shows **Reset demo**, which archives every product in the store) and `STOREFRONT_PASSWORD` (the dev store's storefront password, shown next to the store link).
 
 The "take these down" list only lists marketplaces the item was marked posted on, so for the full story post one item to Poshmark, Vinted and FB beforehand (or tap "I posted it").
 

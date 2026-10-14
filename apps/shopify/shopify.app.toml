@@ -7,7 +7,7 @@ embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products,read_inventory,write_inventory,read_locations,read_orders,write_publications"
+scopes = "read_products,write_products,read_inventory,write_inventory,read_locations,write_publications"
 
 [webhooks]
 api_version = "2027-01"
@@ -21,8 +21,8 @@ api_version = "2027-01"
   topics = [ "app/scopes_update" ]
 
   [[webhooks.subscriptions]]
-  uri = "/webhooks/orders/create"
-  topics = [ "orders/create" ]
+  uri = "/webhooks/inventory_levels/update"
+  topics = [ "inventory_levels/update" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/compliance"
