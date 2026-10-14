@@ -25,13 +25,21 @@ export interface ItemPlan {
 }
 
 const BUYER_PAYS_ALWAYS: ChannelId[] = ["poshmark", "vinted"];
+/** Sold for local pickup only: no platform fee, no shipping. */
+export const LOCAL_ONLY: ChannelId[] = ["fb_marketplace"];
 
 export function saleContextFor(channel: ChannelId, opts: Pick<PlanOptions, "labelCost" | "sellerPaysShipping">): SaleContext {
   const sellerPays = opts.sellerPaysShipping && !BUYER_PAYS_ALWAYS.includes(channel);
-  return { shipping: { paidBy: sellerPays ? "seller" : "buyer", labelCost: opts.labelCost ?? 8 } };
+  return {
+    shipping: { paidBy: sellerPays ? "seller" : "buyer", labelCost: opts.labelCost ?? 8 },
+    localPickup: LOCAL_ONLY.includes(channel),
+  };
 }
 
-export function planItem(facts: Pick<ItemFacts, "categoryGroups" | "estimatedSoldPriceRange">, opts: PlanOptions): ItemPlan {
+export function planItem(
+  facts: Pick<ItemFacts, "categoryGroups" | "estimatedSoldPriceRange"> & { bulky?: boolean },
+  opts: PlanOptions,
+): ItemPlan {
   const { low, high } = facts.estimatedSoldPriceRange;
   const market = opts.marketSoldPrice ?? (low + high) / 2;
   const channels: ChannelId[] = ["shopify", ...opts.enabledChannels.filter((c) => c !== "shopify")];
@@ -41,6 +49,7 @@ export function planItem(facts: Pick<ItemFacts, "categoryGroups" | "estimatedSol
   }
   const routes = routeItem({
     categoryGroups: facts.categoryGroups,
+    bulky: facts.bulky,
     prices,
     enabled: opts.enabledChannels,
     maxChannels: opts.maxChannels,

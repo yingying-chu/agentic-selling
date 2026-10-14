@@ -73,3 +73,26 @@ test("routing never selects a channel the item can't clear the floor on", () => 
   assert.equal(routes.find((r) => r.channel === "ebay")?.selected, false);
   assert.equal(routes.find((r) => r.channel === "grailed")?.selected, true);
 });
+
+test("bulky items go only to local-pickup Facebook Marketplace", () => {
+  const routes = routeItem({ categoryGroups: ["furniture"], bulky: true, prices: {}, enabled: ["fb_marketplace", "poshmark", "vinted"] });
+  assert.deepEqual(routes.filter((r) => r.selected).map((r) => r.channel), ["fb_marketplace"]);
+});
+
+test("electronics favor Facebook Marketplace; a hat skips it", () => {
+  const enabled = ["fb_marketplace", "poshmark", "vinted"] as const;
+  const pick = (groups: Parameters<typeof routeItem>[0]["categoryGroups"]) =>
+    routeItem({ categoryGroups: groups, prices: {}, enabled: [...enabled] }).filter((r) => r.selected).map((r) => r.channel);
+  assert.equal(pick(["electronics"])[0], "fb_marketplace");
+  assert.ok(!pick(["accessories"]).includes("fb_marketplace"));
+});
+
+test("Facebook local pickup prices have no fee and no shipping", async () => {
+  const { planItem } = await import("../src/index.ts");
+  const plan = planItem(
+    { categoryGroups: ["electronics"], estimatedSoldPriceRange: { low: 20, high: 30, currency: "USD" } },
+    { floorNet: 20, enabledChannels: ["fb_marketplace", "poshmark"], sellerPaysShipping: true },
+  );
+  assert.equal(plan.prices.fb_marketplace?.minAcceptPrice, 20);
+  assert.equal(plan.prices.fb_marketplace?.fees.total, 0);
+});

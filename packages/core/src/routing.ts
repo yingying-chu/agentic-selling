@@ -14,6 +14,8 @@ export interface RouteDecision {
 
 export interface RouteInput {
   categoryGroups: CategoryGroup[];
+  /** Too big or heavy to ship affordably: only local-pickup channels qualify. */
+  bulky?: boolean;
   prices: Partial<Record<ChannelId, ChannelPrice>>;
   /** Channels the seller has connected; others are never selected. */
   enabled: ChannelId[];
@@ -32,6 +34,9 @@ export function routeItem(input: RouteInput): RouteDecision[] {
     const price = input.prices[id];
 
     if (!input.enabled.includes(id)) return { channel: id, score: 0, selected: false, reason: "Not connected" };
+    if (input.bulky && id !== "fb_marketplace") {
+      return { channel: id, score: 0, selected: false, reason: "Too bulky to ship affordably; sell it locally" };
+    }
     if (id === "etsy" && !isVintage) {
       return { channel: id, score: 0, selected: false, reason: "Etsy only allows vintage, handmade, or craft supplies" };
     }

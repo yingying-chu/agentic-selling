@@ -17,6 +17,8 @@ export interface ItemFacts {
   flaws: string[];
   measurements: Array<{ name: string; value: string }>;
   styleKeywords: string[];
+  /** Too big or heavy to ship affordably (furniture, large appliances): sell locally. */
+  bulky?: boolean;
   /** Approximate era, only when the photos or tags support it. */
   era: string | null;
   /** Rough resale estimate from the model's own knowledge, before real comps are pulled. */

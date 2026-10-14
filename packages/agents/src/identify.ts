@@ -33,6 +33,7 @@ export const ItemFactsSchema = z.object({
   flaws: z.array(z.string()),
   measurements: z.array(z.object({ name: z.string(), value: z.string() })),
   styleKeywords: z.array(z.string()),
+  bulky: z.boolean(),
   era: z.string().nullable(),
   estimatedSoldPriceRange: z.object({ low: z.number(), high: z.number(), currency: z.literal("USD") }),
   confidence: z.enum(["high", "medium", "low"]),
@@ -42,6 +43,8 @@ export const ItemFactsSchema = z.object({
 const SYSTEM = `You catalog secondhand items for resale from the seller's photos.
 
 Read every label and tag you can see (brand, size, fiber content, RN/CA numbers, style codes, country of origin) and use them over visual guesses. Only state facts the photos or the seller's notes support; when something matters for the listing but you can't confirm it, leave the field null and add a question for the seller.
+
+bulky: true only if it's too big or heavy to ship affordably (furniture, large decor, big appliances, bikes); false for clothing, shoes, bags, small electronics and anything that fits in a normal box.
 
 categoryGroups: every group that applies (a 90s Levi's jacket is mens_clothing + vintage + streetwear). Include "luxury" only for recognised luxury houses. Include "vintage" only when tags or construction indicate 20+ years old.
 
