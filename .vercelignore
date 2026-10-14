@@ -1,0 +1,10 @@
+node_modules
+.env
+.env.*
+**/.env
+**/.env.*
+out
+photos
+apps/shopify/build
+apps/shopify/.react-router
+apps/shopify/.shopify

@@ -5,8 +5,10 @@ generator client {
 // Postgres everywhere (Neon via the Vercel Marketplace in production) so
 // serverless functions share one database.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations need a direct (unpooled) connection; Neon's pooler is fine for queries.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model Session {
