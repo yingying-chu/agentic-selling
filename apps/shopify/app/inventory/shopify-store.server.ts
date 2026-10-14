@@ -404,6 +404,16 @@ export class ShopifyInventoryStore implements InventoryStore {
     return link.product?.onlineStoreUrl ?? `https://${this.shop}/products/${link.product?.handle ?? product.handle}`;
   }
 
+  /** The product an inventory item (from an inventory webhook) belongs to. */
+  async productForInventoryItem(inventoryItemId: string | number): Promise<string | null> {
+    const data = await this.gql<{ inventoryItem: { variant: { product: { id: string } } | null } | null }>(
+      `#graphql
+        query Owner($id: ID!) { inventoryItem(id: $id) { variant { product { id } } } }`,
+      { id: `gid://shopify/InventoryItem/${inventoryItemId}` },
+    );
+    return data.inventoryItem?.variant?.product.id ?? null;
+  }
+
   /** Archives every item that isn't archived yet (demo reset). Archived products leave the store and the item list. */
   async archiveAll(): Promise<number> {
     let count = 0;
