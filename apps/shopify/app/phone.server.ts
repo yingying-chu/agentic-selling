@@ -14,6 +14,15 @@ export async function phoneContext(key: string | undefined) {
   return { shop, store: new ShopifyInventoryStore(admin.graphql, shop) };
 }
 
+/**
+ * The presenter's own phone link (set DEMO_PRESENTER_KEY to its key). Only it
+ * shows "Reset demo", so judges sharing the other link can't wipe each other's items.
+ */
+export function isPresenter(key: string | undefined): boolean {
+  const presenter = process.env.DEMO_PRESENTER_KEY;
+  return Boolean(presenter && key === presenter);
+}
+
 export async function loadItem(store: InventoryStore, id: string): Promise<InventoryItem> {
   const item = await store.getItem(id);
   if (!item) throw new Response("Item not found", { status: 404 });

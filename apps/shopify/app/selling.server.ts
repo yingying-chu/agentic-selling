@@ -136,21 +136,20 @@ export async function publishToStore(store: InventoryStore, item: InventoryItem)
 }
 
 /**
- * A buyer checked out on the store. Locks the item and flags the other
- * listings, once per item: webhook retries and items we never put on the
- * store are ignored.
+ * True when a buyer checked out on the store: the item is live there, its one
+ * unit is gone, and no sale has been recorded yet. Checkout takes the unit
+ * without touching our metafields, so stock is the signal (no order data needed).
  */
-export async function recordStoreSale(store: InventoryStore, productId: string, orderName?: string) {
-  const item = await store.getItem(productId);
-  if (!item) return null;
+export function soldOnStore(item: InventoryItem): boolean {
   const onStore = item.channels.find((c) => c.channel === "shopify");
-  if (onStore?.status !== "active" || item.channels.some((c) => c.status === "sold")) return null;
-  const sale = await recordSale(store, item.id, "shopify");
-  if (orderName) {
-    const states = upsertChannelState(sale.item.channels, { channel: "shopify", status: "sold", externalId: orderName }, new Date().toISOString());
-    await store.saveChannelStates(item.id, states);
-  }
-  return sale;
+  return onStore?.status === "active" && item.quantity === 0 && !item.channels.some((c) => c.status === "sold");
+}
+
+/** Records a store checkout once: locks the item and flags the other listings. Returns null if it isn't one. */
+export async function recordStoreSale(store: InventoryStore, productId: string) {
+  const item = await store.getItem(productId);
+  if (!item || !soldOnStore(item)) return null;
+  return recordSale(store, item.id, "shopify");
 }
 
 export async function confirmDelisted(store: InventoryStore, item: InventoryItem, channel: ChannelId) {

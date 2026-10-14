@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, Link, redirect, useLoaderData, useNavigation, useParams } from "react-router";
-import { phoneContext } from "../phone.server";
+import { isPresenter, phoneContext } from "../phone.server";
 import { STAGE_LABEL } from "../ui";
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
@@ -15,7 +15,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       stage: i.stage,
       needsDelist: i.channels.filter((c) => c.status === "needs_delist").length,
     })),
-    demo: process.env.DEMO_MODE === "1",
+    canReset: isPresenter(params.key),
   };
 };
 
@@ -23,8 +23,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const { store } = await phoneContext(params.key);
   const form = await request.formData();
   if (form.get("intent") === "reset") {
-    // Demo deployments only: archive (not delete) everything so the next person starts clean.
-    if (process.env.DEMO_MODE !== "1") return { error: "Reset is only available in the demo." };
+    // Presenter link only: archive (not delete) everything so the next judge starts clean.
+    if (!isPresenter(params.key)) return { error: "Reset is only available on the presenter link." };
     await store.archiveAll();
     return redirect(`/s/${params.key}`);
   }
@@ -60,7 +60,7 @@ async function shrink(file: File): Promise<Blob> {
 }
 
 export default function PhoneHome() {
-  const { items, demo } = useLoaderData<typeof loader>();
+  const { items, canReset } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const resetting = navigation.formData?.get("intent") === "reset";
   const { key } = useParams();
@@ -139,7 +139,7 @@ export default function PhoneHome() {
         </div>
       )}
 
-      {demo && items.length > 0 && (
+      {canReset && items.length > 0 && (
         <Form
           method="post"
           onSubmit={(e) => {
