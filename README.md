@@ -1,34 +1,67 @@
-# agentic-selling
+# Sellie
 
-Sell the stuff you don't need anymore on every marketplace, from a chat with your AI assistant.
+**Snap a photo. An AI agent lists it everywhere it sells best, and takes it down everywhere else the moment it sells.**
 
-Take photos → your assistant (Claude, ChatGPT…) or the Shopify app identifies the item, prices it for each marketplace from your take-home floor, and writes the listings → you post → when it sells anywhere, the item locks and you get a list of what to take down.
+Sellie is an agentic selling tool for people clearing out a closet, not running a business. You take a few photos with your phone and set the least you'd take home. Sellie does the rest:
 
-## How it fits together
+- **Identifies the item** from the photos: brand, model, size, condition, and what it's worth.
+- **Turns phone snaps into listing photos**: real photos corrected and cut out onto a studio background, plus labeled AI product and model shots. Every edited image is checked for honesty (same color, details and wear) before a buyer sees it.
+- **Picks where to sell**: clothes go to Poshmark and Vinted; chairs, power banks and other bulky or electronic items go to Facebook Marketplace for local pickup.
+- **Prices each marketplace backward from your floor**, so after fees, shipping and the usual offer haggling you still keep what you asked for.
+- **Writes a listing per platform** in that platform's style and limits.
+- **Posts for you**: an AI agent (Claude, through Sellie's MCP server and Claude in Chrome) fills in each marketplace's form in your own signed-in browser and publishes it. The item also goes live on your Shopify store.
+- **Keeps one item from selling twice**: Shopify is the inventory record. When the item sells anywhere, its quantity drops to 0 and every other listing is flagged to take down.
 
+Live app: https://sellie-dusky.vercel.app (Shopify app + phone web page + MCP endpoint, on Vercel)
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph List["Listing it"]
+        direction TB
+        A["1 · Snap photos<br/>phone page"] --> B["2 · Identify<br/>Claude via AI Gateway"]
+        B --> C["3 · Where + price<br/>from your take-home floor"]
+        C --> D["4 · Pro photos<br/>cutout + Gemini renders,<br/>honesty-checked"]
+        D --> E["5 · Agent posts<br/>MCP kit → Claude in Chrome<br/>Poshmark · Vinted · FB"]
+    end
+    subgraph Sell["Selling it"]
+        direction TB
+        F["6 · Watched<br/>every live listing,<br/>every 10 min"] --> G["7 · Sells anywhere<br/>listing says sold out,<br/>or Shopify checkout"]
+        G --> H["8 · Locked<br/>Shopify qty 1 → 0"]
+        H --> I["9 · Take down the rest<br/>agent or one tap"]
+    end
+    E --> F
 ```
- Shopify mobile app ──► photos as a draft product (the seller's private store)
-                              │
-        ┌─────────────────────┴─────────────────────┐
-        ▼                                           ▼
- Claude / ChatGPT ── MCP (/mcp?key=…) ──►    Shopify admin app (embedded)
- (the assistant sees, asks, writes)          ("Write listings with AI" via Vercel AI Gateway)
-        │                                           │
-        └──────────────► shared selling logic ◄─────┘
-                         pricing · routing · listing rules · sale lock
-                                     │
-                              InventoryStore
-                         (Shopify now; hosted DB later for sellers without Shopify)
+
+```mermaid
+flowchart TB
+    Phone["Phone page /s/key"] --> App
+    Claude["Claude / ChatGPT<br/>MCP /mcp?key=…"] --> App
+    Admin["Shopify admin<br/>(embedded app)"] --> App
+    App["Sellie on Vercel<br/>React Router app + shared selling logic<br/>pricing · routing · photo policy · sale lock"]
+    App --> Shopify["Shopify Admin API<br/>products + media · metafields<br/>qty lock · inventory webhook"]
+    App --> Gateway["Vercel AI Gateway<br/>Claude (vision + text)<br/>Gemini (images)<br/>automatic fallback"]
+    Cron["Vercel Cron<br/>every 10 min"] --> App
+    App --> Neon["Neon Postgres<br/>sessions · settings · private links"]
+    Agent["Claude in Chrome<br/>(seller's own browser)"] --> Markets["Poshmark · Vinted · FB Marketplace"]
+    Claude -. posting kit .-> Agent
+    App -. reads public listing pages .-> Markets
 ```
 
-- **Inventory lock:** each item is a product with quantity 1 unless the seller says they have more. A sale with more on hand takes one off and leaves every listing up. Selling the last one sets quantity to 0 first, then flags every other live listing as "take this down".
-- **Pricing:** worked backward from the seller's take-home floor per marketplace, covering fees, who pays shipping, and the discount buyers there usually expect ([pricing.ts](packages/core/src/pricing.ts)). Fees in [fees.ts](packages/core/src/fees.ts) are dated estimates.
-- **Routing:** fixed rules pick marketplaces by category fit and whether the item can clear the floor there ([routing.ts](packages/core/src/routing.ts)).
-- **Posting:** the item goes live on the seller's own Shopify store as a real, buyable listing (sell-once: inventory policy "deny"). A store checkout takes the one unit in stock; the `inventory_levels/update` webhook (and the phone page, as a backup) sees it and runs the same sale lock as a manual "Sold". No order or customer data is read. For Poshmark, Mercari, Depop, Vinted, Grailed and FB, v1 hands the seller copy-ready listings with links. eBay API posting is next.
+**Where Shopify fits:** each item is a Shopify product, kept private until it's put on the store. Photos are product media. Everything Sellie learns is stored in app metafields: item details, floor, per-platform listings, where it's live, photo kinds and the AI trace. Shopify quantity is the lock.
+
+**How a sale syncs back:** marketplaces publish schema.org product data on listing pages, and its `availability` flips from `InStock` to `SoldOut` when the item sells. A Vercel Cron job checks every live listing every 10 minutes ([availability.ts](packages/core/src/availability.ts)). A checkout on your Shopify store arrives instantly through the `inventory_levels/update` webhook. Either way the same sale lock runs: quantity goes to 0 and the other listings are flagged "take down". The phone page also has a **Check for sales** button, and the AI assistant has a `check_sales` tool.
 
 ## Models, routing and fallbacks (Vercel AI Gateway)
 
-Two modalities in, two out: **photos → text** (item details, grades, honesty verdicts) and **photos → photos** (item outlines, AI model shots), plus text → text listings. All calls go through Vercel AI Gateway; the routing table lives in [models.ts](packages/agents/src/models.ts).
+There are three model paths:
+
+- **photos → text:** item details, photo grades, honesty verdicts.
+- **photos → photos:** item cutout masks, AI product and model shots.
+- **text → text:** listings.
+
+All calls go through Vercel AI Gateway. The routing table lives in [models.ts](packages/agents/src/models.ts).
 
 | Task | In → out | Primary | Backups | Why |
 |---|---|---|---|---|
@@ -37,23 +70,56 @@ Two modalities in, two out: **photos → text** (item details, grades, honesty v
 | Write listings | text → text | Claude Sonnet 5.5 | Haiku 5.5 → Opus 5.5 | Good copy at half Opus price, faster |
 | Honesty check | photos → verdict | Claude Sonnet 5.5 | Opus 5.5 | Runs per edited image; must be reliable |
 | Item outline | photo → mask | Nano Banana 2.1 | Gemini 3.1 Flash Image → 2.5 Flash Image | B/W output; cheapest and fastest (~$0.03) |
-| AI model photo | photos → photo | Nano Banana Pro | Nano Banana 2.1 → 3.1 Flash Image | Buyer-facing, most faithful (~$0.13) |
+| AI product / model photo | photos → photo | Nano Banana Pro | Nano Banana 2.1 → 3.1 Flash Image | Buyer-facing, most faithful (~$0.13) |
 
-**When a provider fails:** each model is tried across its providers first (Claude: Anthropic → Vertex → Bedrock; Gemini: Google → Vertex), then the Gateway moves to the next model in the list (`providerOptions.gateway.models` + `order`). Backup image renders still have to pass the honesty check, so a weaker fallback can't put a misleading photo in a listing. If a step fails entirely, the item keeps the seller's own corrected photos.
+**When a provider fails:**
+1. The Gateway first tries the same model on another provider. For Claude that's Anthropic → Vertex → Bedrock; for Gemini, Google → Vertex.
+2. Then it moves to the next model in the list (`providerOptions.gateway.models` + `order`).
+3. Backup image renders still have to pass the honesty check (accuracy, plus a stock-quality score of at least 7/10), so a weaker fallback can't put a misleading photo in a listing.
+4. If a step fails entirely, the item keeps the seller's own corrected photos.
 
-**Seeing it:** every call's answering model, provider, latency and cost (from the Gateway's routing metadata) is saved on the item and shown on the phone page. The "simulate an outage" switch replaces each primary model ID with one that doesn't exist, so the Gateway really fails it and really falls back. Example: listings normally on Sonnet 5.5 (4.1 s, $0.0055); with the outage, Haiku 5.5 answered (2.6 s, $0.0002).
+**Seeing it:** every call's answering model, provider, latency and cost (from the Gateway's routing metadata) is saved on the item and shown on the phone page under **AI used for this item**. The **simulate an outage** switch replaces each primary model ID with one that doesn't exist, so the Gateway really fails it and really falls back. Example: listings normally on Sonnet 5.5 (4.1 s, $0.0055); with the outage, Haiku 5.5 answered (2.6 s, $0.0002).
+
+**Photo honesty, per platform:** Vinted, Depop and eBay keep a real photo as the cover. Poshmark, Mercari, FB and the Shopify store may lead with a labeled AI product shot when no real-photo studio shot passes the quality bar. Any listing with AI images gets a disclosure line ([photos.ts](packages/core/src/photos.ts)).
+
+## For judges
+
+You need two things, both in our submission: the **judge link** (a private phone page, `https://sellie-dusky.vercel.app/s/<key>`) and the **store password**. The link works like a password to the demo store, so it isn't in this README. Open it on your phone or a desktop browser.
+
+**1. List something (about 2 minutes)**
+1. Open the judge link. Tap **Take photo** or **Choose photos** and add 1–4 photos of anything: a jacket, shoes, a cap, a mouse, a chair. Include the tag if it has one.
+2. Enter a number under **Least you want to keep after fees** (e.g. 10), then tap **Sell this**.
+3. Watch it work: **What we found** fills in (Claude identifies the item), then **Where it sells best** shows each marketplace with its price and what you'd keep, and the listings are written. In parallel, **Photos** fills with the studio cutout and the AI shots. Any shot that failed the honesty check is listed with the reason.
+
+**2. See the model routing and a failover**
+1. Scroll to **AI used for this item**. Each step shows which model answered, on which provider, how long it took and what it cost.
+2. Tick **Demo: simulate an outage of every primary model**, then tap **Redo AI photos** (or add another item). The new rows show the primary failing and a backup answering, with the cost difference.
+
+**3. Buy it, and watch it lock**
+1. In **Your Shopify store**, tap **Put it on your store**, then **Open the store listing**. Enter the store password.
+2. Check out with the test card shown on the page. No real money moves.
+3. Go back to the phone page. Within a few seconds the item flips to **Sold**: Shopify quantity is now 0, and **Take these down now** lists every marketplace it was posted on, each with a link.
+
+**4. The agent posting (in our demo video)**
+Posting to Poshmark, Vinted and FB happens in the seller's own signed-in browser, so judges see it in the video rather than live. Claude reads the item's posting kit over MCP (title, description, price, photos in order, offer floor), fills in the marketplace form with Claude in Chrome, publishes it, and saves the listing link back to Sellie. From then on the 10-minute sale check watches that listing.
+
+Something stuck? Reload the page: every step saves to Shopify as it finishes, so nothing is lost. The **Check for sales** button on the home page runs the marketplace sale check on demand.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `packages/core` | Channel profiles, fees, pricing, routing, inventory interface, sale logic. No dependencies; tested. |
-| `packages/agents` | Server-side Claude calls: identify item from photos, write listings. Uses Vercel AI Gateway when `AI_GATEWAY_API_KEY` is set. |
-| `apps/shopify` | Public Shopify app (React Router, Polaris, Prisma/Postgres) hosted on Vercel. Admin screens + the MCP endpoint. |
+| `packages/core` | Channel profiles, fees, pricing, routing, photo policy, sale detection, inventory interface, sale logic. No dependencies; tested (`npm test`). |
+| `packages/agents` | AI steps: identify, grade photos, write listings, image cutout and renders, honesty check. Model routing and tracing in `models.ts`. |
+| `apps/shopify` | Public Shopify app (React Router, Polaris, Prisma/Postgres) on Vercel: admin screens, the phone page, the MCP endpoint, the sale-check cron and webhooks. |
 
 ## Run locally
 
-Needs Node 24+, the [Shopify CLI](https://shopify.dev/docs/api/shopify-cli) (`npm i -g @shopify/cli`), a Shopify Partner account with a development store, and Postgres.
+You need:
+- Node 24+
+- the [Shopify CLI](https://shopify.dev/docs/api/shopify-cli) (`npm i -g @shopify/cli`)
+- a Shopify Partner account with a development store
+- Postgres
 
 ```bash
 npm install
@@ -72,29 +138,35 @@ CLI-only intake (no Shopify): `npm run intake -- --floor 40 photos/*.jpg` from t
 
 1. Import the repo in Vercel, root directory `apps/shopify` (framework: React Router; build command `npm run vercel-build`).
 2. Add a Neon Postgres database from the Vercel Marketplace (sets `DATABASE_URL`).
-3. Set `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SCOPES` (same list as `shopify.app.toml`), `SHOPIFY_APP_URL` (the Vercel URL), `AI_GATEWAY_API_KEY`.
+3. Set these variables:
+   - `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`
+   - `SCOPES` (same list as `shopify.app.toml`)
+   - `SHOPIFY_APP_URL` (the Vercel URL)
+   - `AI_GATEWAY_API_KEY`
+   - `CRON_SECRET` (protects the sale-check cron)
 4. Point the app at the Vercel URL in `shopify.app.toml` (`application_url`, redirect URLs) and run `shopify app deploy` to push config, webhooks and metafield definitions.
 
-## Judge demo
+### Demo store setup
 
-Judges only need the phone link (`/s/<key>`, from **Connect AI** in the app). They add photos, watch the item get identified, priced, written up and put on the store, then buy it on the storefront with a test card and watch the phone page flip to sold.
-
-One-time setup on the dev store:
-
-1. `shopify app deploy`, then open the app once in the store admin to approve the new scope (`write_publications`).
+1. `shopify app deploy`, then open the app once in the store admin to approve new scopes.
 2. Turn on test payments (**Settings → Payments**: Shopify's Bogus Gateway, or Shopify Payments in test mode). If you use Shopify Payments, set `DEMO_TEST_CARD` to its test card.
-3. In **Connect AI**, make two links: one for judges, one for you. On Vercel, set `DEMO_PRESENTER_KEY` to your link's key (only that link shows **Reset demo**, which archives every product in the store) and `STOREFRONT_PASSWORD` (the dev store's storefront password, shown next to the store link).
+3. In **Connect AI**, make two links: one for judges and one for you. On Vercel, set two variables:
+   - `DEMO_PRESENTER_KEY`: your link's key. Only that link shows **Reset demo**, which archives every product in the store.
+   - `STOREFRONT_PASSWORD`: the dev store's storefront password, shown next to the store link.
 
-The "take these down" list only lists marketplaces the item was marked posted on, so for the full story post one item to Poshmark, Vinted and FB beforehand (or tap "I posted it").
+The take-down list only includes marketplaces the item was posted on. For the full story, post one item to Poshmark, Vinted and FB beforehand (or tap **I posted it**).
 
 ## Before public launch
 
 - Replace secret connection links with OAuth sign-in for the MCP endpoint (`withMcpAuth` from mcp-handler).
+- Price from each marketplace's own sold comps (e.g. Poshmark's similar-sold average), not one estimate.
+- Instant sale detection from marketplace "you made a sale" emails, alongside the 10-minute check.
 - Shopify App Store review: billing through the Shopify Billing API, listing assets, privacy policy.
 - Check every fee in `fees.ts` against real payouts.
 - eBay production API keys and OAuth per seller.
 
 ## Known risks
 
-- Automating Poshmark, Mercari, Depop and FB breaks their terms, so v1 doesn't; the seller posts and takes down listings by hand with links we provide.
-- Double sales on one-of-one items: the lock is instant, but manual delisting depends on the seller acting on the reminder.
+- Poshmark, Vinted and FB have no listing API for individuals. The agent posts by driving the seller's own browser, with the seller signed in and watching. Sellie never sees or stores marketplace passwords. Automated posting may still conflict with a marketplace's terms, so the seller can always post from the copy-ready kit by hand instead.
+- Double sales on one-of-one items: the Shopify lock is instant, but a marketplace sale is seen within 10 minutes, and taking the other listings down depends on the agent or the seller acting on the reminder.
+- Sale detection reads public listing pages. If a marketplace changes or hides its product data, that listing reads as "unknown" and nothing changes. Poshmark's sold signal is verified; Vinted's isn't yet.
