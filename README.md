@@ -8,7 +8,7 @@ Sellie is an agentic selling tool for people clearing out a closet, not running 
 - **Turns phone snaps into listing photos**: real photos corrected and cut out onto a studio background, plus labeled AI product and model shots. Every edited image is checked for honesty (same color, details and wear) before a buyer sees it.
 - **Picks where to sell**: clothes go to Poshmark and Vinted; chairs, power banks and other bulky or electronic items go to Facebook Marketplace for local pickup.
 - **Prices each marketplace backward from your floor**, so after fees, shipping and the usual offer haggling you still keep what you asked for.
-- **Writes a listing per platform** in that platform's style and limits.
+- **Writes a listing per platform, tuned for how buyers search there (SEO and GEO)**: the keywords and title format each platform's search favors (eBay's keyword-dense 80 characters, Depop's style hashtags, plain "what it is" titles for FB local buyers), within its length limits. Descriptions are written in clear, complete sentences so AI shopping assistants can quote them accurately.
 - **Posts for you**: an AI agent (Claude, through Sellie's MCP server and Claude in Chrome) fills in each marketplace's form in your own signed-in browser and publishes it. The item also goes live on your Shopify store.
 - **Keeps one item from selling twice**: Shopify is the inventory record. When the item sells anywhere, its quantity drops to 0 and every other listing is flagged to take down.
 
