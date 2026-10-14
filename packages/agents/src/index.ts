@@ -3,3 +3,4 @@ export { writeListings } from "./listings.ts";
 export { runIntake, type IntakeInput, type IntakeResult } from "./intake.ts";
 export { preparePhotos, photosFromUrls, type PreparedPhoto } from "./claude.ts";
 export { improvePhotos, type PhotoInput, type PhotoResult, type ProcessedPhoto, type PhotoOptions } from "./photos/pipeline.ts";
+export { ROUTES, withTrace, type CallTrace, type Route, type Task } from "./models.ts";

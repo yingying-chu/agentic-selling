@@ -1,4 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type { z } from "zod";
+import { record, route, ROUTES, type Task } from "./models.ts";
 
 const GATEWAY_URL = "https://ai-gateway.vercel.sh";
 
@@ -9,22 +12,56 @@ const GATEWAY_URL = "https://ai-gateway.vercel.sh";
  */
 export const viaGateway = (): boolean => Boolean(process.env.AI_GATEWAY_API_KEY);
 
-export const model = (): string => (viaGateway() ? "anthropic/claude-opus-5-5" : "claude-opus-5-5");
-
-/**
- * Server-side refusal fallback is an Anthropic API feature; it isn't assumed to
- * pass through the gateway, so it's only sent on direct calls.
- */
-export function fallbackParams(): { betas?: string[]; fallbacks?: "default" } {
-  return viaGateway() ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
-}
-
 let client: Anthropic | undefined;
 export function claude(): Anthropic {
   client ??= viaGateway()
     ? new Anthropic({ baseURL: GATEWAY_URL, apiKey: process.env.AI_GATEWAY_API_KEY })
     : new Anthropic();
   return client;
+}
+
+/** Gateway slug ("anthropic/claude-opus-5.5") → direct Anthropic API ID ("claude-opus-5-5"). */
+const directId = (slug: string) => slug.replace(/^anthropic\//, "").replaceAll(".", "-");
+
+type ParseParams = Omit<Anthropic.Beta.Messages.MessageCreateParamsNonStreaming, "model" | "output_config"> & {
+  effort: "low" | "medium" | "high";
+};
+
+/**
+ * One structured Claude call for a task: routed through the Gateway with the
+ * task's backup models, recorded for the trace, and parsed tolerantly so a
+ * backup model that wraps its JSON in prose still works.
+ */
+export async function structuredCall<S extends z.ZodType>(task: Task, schema: S, params: ParseParams): Promise<z.infer<S>> {
+  const { effort, ...rest } = params;
+  const r = route(task);
+  const started = Date.now();
+  const gatewayExtras: object = viaGateway() ? { providerOptions: r.providerOptions } : {};
+  const res = await claude().beta.messages.parse({
+    ...rest,
+    ...gatewayExtras,
+    model: viaGateway() ? r.model : directId(ROUTES[task].models[0]),
+    output_config: { effort, format: zodOutputFormat(schema) },
+  });
+  record(task, r.model, started, (res as unknown as { provider_metadata?: { gateway?: object } }).provider_metadata?.gateway);
+
+  if (res.stop_reason === "refusal") {
+    throw new Error(`The model declined this request: ${res.stop_details?.explanation ?? "no details"}`);
+  }
+  if (res.parsed_output) return res.parsed_output as z.infer<S>;
+  const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  const parsed = json ? schema.safeParse(safeJson(json)) : null;
+  if (parsed?.success) return parsed.data;
+  throw new Error(`${ROUTES[task].label}: no usable answer (stop_reason: ${res.stop_reason})`);
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 export interface PreparedPhoto {

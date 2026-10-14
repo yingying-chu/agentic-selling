@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { CHANNELS, fitText, type ChannelId, type ChannelPrice, type ItemFacts, type ListingDraft } from "@agentic-selling/core";
-import { claude, fallbackParams, model } from "./claude.ts";
+import { structuredCall } from "./claude.ts";
 
 const DraftSchema = z.object({
   drafts: z.array(
@@ -42,11 +41,9 @@ export async function writeListings(
     };
   });
 
-  const response = await claude().beta.messages.parse({
-    model: model(),
+  const out = await structuredCall("listings", DraftSchema, {
     max_tokens: 16000,
-    ...fallbackParams(),
-    output_config: { effort: "low", format: zodOutputFormat(DraftSchema) },
+    effort: "low",
     system: SYSTEM,
     messages: [
       {
@@ -55,12 +52,6 @@ export async function writeListings(
       },
     ],
   });
-
-  if (response.stop_reason === "refusal") {
-    throw new Error(`Model declined to write listings: ${response.stop_details?.explanation ?? "no details"}`);
-  }
-  const out = response.parsed_output;
-  if (!out) throw new Error(`No structured output (stop_reason: ${response.stop_reason})`);
 
   return channels.flatMap((id): ListingDraft[] => {
     const d = out.drafts.find((x) => x.channel === id);

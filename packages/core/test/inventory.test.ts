@@ -52,7 +52,7 @@ test("stageOf follows the item through its life", () => {
 test("recordSale zeroes quantity before touching channel states", async () => {
   const calls: string[] = [];
   const item: InventoryItem = {
-    id: "1", title: "Dress", photos: [], quantity: 1, floorNet: 20, notes: null, facts: null, listings: [],
+    id: "1", title: "Dress", photos: [], quantity: 1, floorNet: 20, notes: null, facts: null, listings: [], aiTrace: [],
     channels: [
       { channel: "poshmark", status: "active", updatedAt: t },
       { channel: "mercari", status: "active", url: "https://mercari.com/x", updatedAt: t },

@@ -64,6 +64,14 @@ type = "json"
   [product.metafields.app.photo_kinds.access]
   admin = "merchant_read"
 
+[product.metafields.app.ai_trace]
+name = "AI calls"
+description = "Which AI model handled each step, on which provider, how fast and at what cost"
+type = "json"
+
+  [product.metafields.app.ai_trace.access]
+  admin = "merchant_read"
+
 [auth]
 redirect_urls = [ "https://sellie-dusky.vercel.app/auth/callback", "https://sellie-dusky.vercel.app/auth/shopify/callback", "https://sellie-dusky.vercel.app/api/auth/callback" ]
 

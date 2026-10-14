@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { CategoryGroup, ItemFacts } from "@agentic-selling/core";
-import { claude, fallbackParams, imageBlocks, model, type PreparedPhoto } from "./claude.ts";
+import { imageBlocks, structuredCall, type PreparedPhoto } from "./claude.ts";
 
 const CATEGORY_GROUPS = [
   "womens_clothing",
@@ -53,11 +52,9 @@ estimatedSoldPriceRange: what this realistically SELLS for used in the US second
 If the item could be counterfeit (luxury brand, mismatched tags), say so in questionsForSeller.`;
 
 export async function identifyItem(photos: PreparedPhoto[], sellerNotes = ""): Promise<ItemFacts> {
-  const response = await claude().beta.messages.parse({
-    model: model(),
+  return structuredCall("identify", ItemFactsSchema, {
     max_tokens: 16000,
-    ...fallbackParams(),
-    output_config: { effort: "medium", format: zodOutputFormat(ItemFactsSchema) },
+    effort: "medium",
     system: SYSTEM,
     messages: [
       {
@@ -72,10 +69,4 @@ export async function identifyItem(photos: PreparedPhoto[], sellerNotes = ""): P
       },
     ],
   });
-
-  if (response.stop_reason === "refusal") {
-    throw new Error(`Model declined to catalog this item: ${response.stop_details?.explanation ?? "no details"}`);
-  }
-  if (!response.parsed_output) throw new Error(`No structured output (stop_reason: ${response.stop_reason})`);
-  return response.parsed_output;
 }

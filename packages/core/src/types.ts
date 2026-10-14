@@ -54,3 +54,15 @@ export interface ChannelListingState {
   updatedAt: string;
   error?: string;
 }
+
+/** One AI call as served through the gateway: which model answered, where, how fast, at what cost. */
+export interface ModelCall {
+  task: string;
+  requested: string;
+  servedBy: string;
+  provider: string | null;
+  fellBack: boolean;
+  failed: string[];
+  ms: number;
+  costUsd: number | null;
+}

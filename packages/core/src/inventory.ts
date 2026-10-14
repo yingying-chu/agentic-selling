@@ -1,6 +1,6 @@
 import { CHANNELS, type ChannelId } from "./channels.ts";
 import type { PhotoKind } from "./photos.ts";
-import type { ChannelListingState, ItemFacts, ListingDraft } from "./types.ts";
+import type { ChannelListingState, ItemFacts, ListingDraft, ModelCall } from "./types.ts";
 
 // The inventory layer. Shopify is the first implementation; a hosted database
 // for sellers without Shopify can implement the same interface later. All the
@@ -37,6 +37,8 @@ export interface InventoryItem {
   facts: ItemFacts | null;
   listings: ListingDraft[];
   channels: ChannelListingState[];
+  /** Recent AI calls for this item, newest last. */
+  aiTrace: ModelCall[];
   stage: ItemStage;
   /** Link to the item in the store's own admin, if there is one. */
   adminUrl?: string;
@@ -62,6 +64,8 @@ export interface InventoryStore {
   /** Creates a new item (quantity 1) from the seller's photos; returns its ID. */
   createItem(title: string, photos: NewPhoto[], notes?: string): Promise<string>;
   renameItem(id: string, title: string): Promise<void>;
+  /** Appends AI calls to the item's trace (keeps the most recent ones). */
+  appendTrace(id: string, calls: ModelCall[]): Promise<void>;
   /** Attaches processed photos (enhanced, studio, AI) to an item. */
   addPhotos(id: string, photos: NewPhoto[]): Promise<void>;
 }

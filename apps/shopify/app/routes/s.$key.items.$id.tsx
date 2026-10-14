@@ -5,6 +5,7 @@ import { CHANNELS, photosForChannel, type ChannelId } from "@agentic-selling/cor
 import { loadItem, makeListingPhotos, phoneContext } from "../phone.server";
 import { confirmDelisted, getSettings, isChannelId, markPosted, markSold, planFor, POST_LINKS } from "../selling.server";
 import { identifyStep, listingsStep } from "../ai.server";
+import { ROUTES, withTrace } from "@agentic-selling/agents";
 import { money, STAGE_LABEL } from "../ui";
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
@@ -23,6 +24,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     plan: "missing" in plan ? null : plan,
     kits,
     processedPhotos: item.photos.some((p) => p.kind !== "original"),
+    routes: ROUTES,
   };
 };
 
@@ -33,25 +35,32 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const form = await request.formData();
   const intent = String(form.get("intent"));
   const channel = String(form.get("channel") ?? "");
+  // Every AI step is traced: which model answered, on which provider, how fast, what it cost.
+  // "simulate" swaps each primary model for one that doesn't exist, so the gateway really falls back.
+  const traced = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    const { result, trace } = await withTrace({ simulateOutage: form.get("simulate") === "1" }, fn);
+    await store.appendTrace(item.id, trace);
+    return result;
+  };
   try {
     switch (intent) {
       case "analyze": {
-        await identifyStep(store, item, item.notes ?? undefined);
+        await traced(() => identifyStep(store, item, item.notes ?? undefined));
         return { ok: "Identified." };
       }
       case "listings": {
-        const drafts = await listingsStep(store, item, settings);
+        const drafts = await traced(() => listingsStep(store, item, settings));
         return { ok: drafts.length ? "Listings written." : "Add your floor price to get prices and listings." };
       }
       case "photos": {
-        const r = await makeListingPhotos(store, item, true);
+        const r = await traced(() => makeListingPhotos(store, item, true));
         return { ok: `${r.added} listing-ready photos.`, photoNotes: r };
       }
       case "floor": {
         const floor = Number(form.get("floor"));
         if (!Number.isFinite(floor) || floor <= 0) return { error: "Enter an amount above $0." };
         await store.saveFloor(item.id, floor);
-        const drafts = await listingsStep(store, { ...item, floorNet: floor }, settings);
+        const drafts = await traced(() => listingsStep(store, { ...item, floorNet: floor }, settings));
         return { ok: `Priced and wrote ${drafts.length} listings.` };
       }
       case "posted":
@@ -114,7 +123,23 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 export default function PhoneItem() {
-  const { item, plan, kits, processedPhotos } = useLoaderData<typeof loader>();
+  const { item, plan, kits, processedPhotos, routes } = useLoaderData<typeof loader>();
+  const [simulate, setSimulate] = useState(false);
+  useEffect(() => {
+    try {
+      setSimulate(localStorage.getItem("sellie-simulate-outage") === "1");
+    } catch {
+      // Storage unavailable; the switch just starts off.
+    }
+  }, []);
+  const toggleSimulate = (on: boolean) => {
+    setSimulate(on);
+    try {
+      localStorage.setItem("sellie-simulate-outage", on ? "1" : "0");
+    } catch {
+      // Not persisted; fine for this visit.
+    }
+  };
   const { key } = useParams();
   const fetcher = useFetcher<typeof action>();
   const photoFetcher = useFetcher<typeof action>();
@@ -130,7 +155,7 @@ export default function PhoneItem() {
     const start = (f: typeof fetcher, intent: string) => {
       if (started.current.has(intent)) return;
       started.current.add(intent);
-      f.submit({ intent }, { method: "post" });
+      f.submit({ intent, simulate: simulate ? "1" : "0" }, { method: "post" });
     };
     if (!item.facts) {
       if (!busy) start(fetcher, "analyze");
@@ -256,6 +281,7 @@ export default function PhoneItem() {
       {facts && item.floorNet === null && (
         <fetcher.Form method="post" className="card">
           <input type="hidden" name="intent" value="floor" />
+          <input type="hidden" name="simulate" value={simulate ? "1" : "0"} />
           <h2>What's the least you'd take home?</h2>
           <p className="muted">After fees and shipping. We'll price each platform so you never go below it.</p>
           <input name="floor" type="number" inputMode="decimal" min={1} placeholder="e.g. 25" />
@@ -340,6 +366,63 @@ export default function PhoneItem() {
           </div>
         );
       })}
+
+      <div className="card">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0 }}>AI used for this item</h2>
+          <span className="muted">
+            {money(item.aiTrace.reduce((sum, c) => sum + (c.costUsd ?? 0), 0))} total
+          </span>
+        </div>
+        {item.aiTrace.length === 0 ? (
+          <p className="muted">Nothing yet.</p>
+        ) : (
+          <table style={{ marginTop: 8 }}>
+            <thead>
+              <tr>
+                <th>Step</th>
+                <th>Answered by</th>
+                <th>Time</th>
+                <th>Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {item.aiTrace.map((c, i) => (
+                <tr key={i}>
+                  <td>{routes[c.task as keyof typeof routes]?.label ?? c.task}</td>
+                  <td>
+                    {c.servedBy.split("/")[1]}
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {c.provider ?? ""}
+                      {c.fellBack && <span className="chip warn" style={{ marginLeft: 4 }}>fallback</span>}
+                    </div>
+                    {c.failed.length > 0 && (
+                      <div className="muted" style={{ fontSize: 12 }}>failed: {c.failed.map((f) => f.split("/")[1]).join(", ")}</div>
+                    )}
+                  </td>
+                  <td>{(c.ms / 1000).toFixed(1)}s</td>
+                  <td>{c.costUsd !== null ? `$${c.costUsd.toFixed(4)}` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <label className="row" style={{ marginTop: 12, fontWeight: 400 }}>
+          <input type="checkbox" checked={simulate} onChange={(e) => toggleSimulate(e.target.checked)} />
+          <span>Demo: simulate an outage of every primary model (the next AI steps fall back)</span>
+        </label>
+        <details style={{ marginTop: 8 }}>
+          <summary className="muted">How Sellie picks models</summary>
+          {Object.entries(routes).map(([task, r]) => (
+            <div key={task} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+              <strong>{r.label}</strong> <span className="muted">· {r.modality}</span>
+              <div style={{ fontSize: 14 }}>{r.models.map((m) => m.split("/")[1]).join(" → ")}</div>
+              <div className="muted" style={{ fontSize: 13 }}>{r.why}</div>
+              <div className="muted" style={{ fontSize: 12 }}>Providers tried per model: {r.providers.join(", ")}</div>
+            </div>
+          ))}
+        </details>
+      </div>
 
       {item.stage !== "sold" && live.length > 0 && (
         <div className="card">

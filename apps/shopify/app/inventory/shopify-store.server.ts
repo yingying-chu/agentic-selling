@@ -7,6 +7,7 @@ import {
   type ItemFacts,
   type ListingDraft,
   type ListItemsOptions,
+  type ModelCall,
   type NewPhoto,
   type PhotoKind,
 } from "@agentic-selling/core";
@@ -52,6 +53,7 @@ const PRODUCT_FIELDS = `#graphql
     listings: metafield(namespace: "$app", key: "listings") { value }
     channels: metafield(namespace: "$app", key: "channels") { value }
     photoKinds: metafield(namespace: "$app", key: "photo_kinds") { value }
+    aiTrace: metafield(namespace: "$app", key: "ai_trace") { value }
   }
 `;
 
@@ -71,6 +73,7 @@ interface ProductNode {
   listings: { value: string } | null;
   channels: { value: string } | null;
   photoKinds: { value: string } | null;
+  aiTrace: { value: string } | null;
 }
 
 function parseJson<T>(field: { value: string } | null, fallback: T): T {
@@ -114,6 +117,7 @@ export class ShopifyInventoryStore implements InventoryStore {
       facts: parseJson<ItemFacts | null>(p.facts, null),
       listings: parseJson<ListingDraft[]>(p.listings, []),
       channels: parseJson<ChannelListingState[]>(p.channels, []),
+      aiTrace: parseJson<ModelCall[]>(p.aiTrace, []),
       adminUrl: `https://admin.shopify.com/store/${this.shop.replace(".myshopify.com", "")}/products/${p.id.split("/").pop()}`,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
@@ -243,6 +247,17 @@ export class ShopifyInventoryStore implements InventoryStore {
     if (!product) throw new Error(`Couldn't create item: ${data.productCreate.userErrors.map((e) => e.message).join("; ")}`);
     await this.setQuantity(product.id, 1);
     return product.id;
+  }
+
+  async appendTrace(id: string, calls: ModelCall[]): Promise<void> {
+    if (!calls.length) return;
+    const current = await this.gql<{ product: { aiTrace: { value: string } | null } | null }>(
+      `#graphql
+        query Trace($id: ID!) { product(id: $id) { aiTrace: metafield(namespace: "$app", key: "ai_trace") { value } } }`,
+      { id: normalizeProductId(id) },
+    );
+    const all = [...parseJson<ModelCall[]>(current.product?.aiTrace ?? null, []), ...calls].slice(-40);
+    await this.setMetafield(id, "ai_trace", "json", JSON.stringify(all));
   }
 
   async renameItem(id: string, title: string): Promise<void> {
