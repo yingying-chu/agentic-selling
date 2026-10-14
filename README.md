@@ -95,7 +95,7 @@ All calls go through Vercel AI Gateway. The routing table lives in [models.ts](p
 
 ## For judges
 
-You need two things, both in our submission: the **judge link** (a private phone page, `https://sellie-dusky.vercel.app/s/<key>`) and the **store password**. The link works like a password to the demo store, so it isn't in this README. Open it on your phone or a desktop browser.
+You need the **judge link** from our submission (a private phone page, `https://sellie-dusky.vercel.app/s/<key>`). It works like a password to the demo store, so it isn't in this README. Open it on your phone or a desktop browser.
 
 **1. List something (about 2 minutes)**
 1. Open the judge link. Tap **Take photo** or **Choose photos** and add 1–4 photos of anything: a jacket, shoes, a cap, a mouse, a chair. Include the tag if it has one.
@@ -106,10 +106,10 @@ You need two things, both in our submission: the **judge link** (a private phone
 1. Scroll to **AI used for this item**. Each step shows which model answered, on which provider, how long it took and what it cost.
 2. Tick **Demo: simulate an outage of every primary model**, then tap **Redo AI photos** (or add another item). The new rows show the primary failing and a backup answering, with the cost difference.
 
-**3. Buy it, and watch it lock**
-1. In **Your Shopify store**, tap **Put it on your store**, then **Open the store listing**. Enter the store password.
-2. Check out with the test card shown on the page. No real money moves.
-3. Go back to the phone page. Within a few seconds the item flips to **Sold**: Shopify quantity is now 0, and **Take these down now** lists every marketplace it was posted on, each with a link.
+**3. Sell it, and watch it lock**
+1. On two marketplace cards (e.g. Poshmark and Vinted), tap **I posted it**. The link is optional.
+2. Under **Sold it?**, tap **Sold on Poshmark**.
+3. The item locks: Shopify quantity drops to 0, and **Take these down now** lists the other marketplace with a link. In real use the 10-minute sale check (or a Shopify store checkout) does this for you, with no tapping.
 
 **4. The agent posting ([watch on Loom](https://www.loom.com/share/e17df555398c4667b319f074b198831e))**
 Posting to Poshmark, Vinted and FB happens in the seller's own signed-in browser, so judges see it in the video rather than live. Claude reads the item's posting kit over MCP (title, description, price, photos in order, offer floor), fills in the marketplace form with Claude in Chrome, publishes it, and saves the listing link back to Sellie. From then on the 10-minute sale check watches that listing.
