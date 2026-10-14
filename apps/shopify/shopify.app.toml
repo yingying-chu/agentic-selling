@@ -7,7 +7,7 @@ embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products,read_inventory,write_inventory,read_locations"
+scopes = "read_products,write_products,read_inventory,write_inventory,read_locations,read_orders,write_publications"
 
 [webhooks]
 api_version = "2027-01"
@@ -19,6 +19,10 @@ api_version = "2027-01"
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/create"
+  topics = [ "orders/create" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/compliance"
@@ -62,6 +66,14 @@ description = "Which photos are originals, corrected, studio, or AI-generated"
 type = "json"
 
   [product.metafields.app.photo_kinds.access]
+  admin = "merchant_read"
+
+[product.metafields.app.notes]
+name = "Seller notes"
+description = "What the seller said when adding the item, kept after the description becomes the store listing"
+type = "multi_line_text_field"
+
+  [product.metafields.app.notes.access]
   admin = "merchant_read"
 
 [product.metafields.app.ai_trace]

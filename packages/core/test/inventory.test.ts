@@ -30,6 +30,35 @@ test("applySale adds the sale channel if it wasn't tracked", () => {
   assert.equal(next.find((s) => s.channel === "ebay")?.status, "needs_delist");
 });
 
+test("applySale takes the store listing down itself; marketplaces still need the seller", () => {
+  const next = applySale(
+    [
+      { channel: "shopify", status: "active", updatedAt: t, url: "https://shop.example/products/dress" },
+      { channel: "vinted", status: "active", updatedAt: t },
+    ],
+    "poshmark",
+    "now",
+  );
+  assert.equal(next.find((s) => s.channel === "shopify")?.status, "delisted");
+  assert.equal(next.find((s) => s.channel === "vinted")?.status, "needs_delist");
+});
+
+test("a store sale flags every live marketplace listing", () => {
+  const next = applySale(
+    [
+      { channel: "shopify", status: "active", updatedAt: t },
+      { channel: "poshmark", status: "active", updatedAt: t },
+      { channel: "fb_marketplace", status: "active", updatedAt: t },
+    ],
+    "shopify",
+    "now",
+  );
+  assert.deepEqual(
+    next.map((s) => [s.channel, s.status]),
+    [["shopify", "sold"], ["poshmark", "needs_delist"], ["fb_marketplace", "needs_delist"]],
+  );
+});
+
 test("upsertChannelState keeps earlier fields like url", () => {
   const next = upsertChannelState(
     [{ channel: "mercari", status: "active", url: "https://mercari.com/x", updatedAt: t }],

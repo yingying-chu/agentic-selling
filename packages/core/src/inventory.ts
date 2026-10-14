@@ -68,6 +68,20 @@ export interface InventoryStore {
   appendTrace(id: string, calls: ModelCall[]): Promise<void>;
   /** Attaches processed photos (enhanced, studio, AI) to an item. */
   addPhotos(id: string, photos: NewPhoto[]): Promise<void>;
+  /**
+   * Puts the item up for sale on the store's own storefront, for stores that
+   * have one. Returns the buyer-facing product link.
+   */
+  publish?(id: string, listing: StorefrontListing): Promise<string>;
+}
+
+export interface StorefrontListing {
+  title: string;
+  /** Plain text; paragraphs separated by blank lines. */
+  description: string;
+  price: number;
+  /** Photo URLs in display order, cover first. */
+  photoUrls: string[];
 }
 
 export function stageOf(item: Pick<InventoryItem, "facts" | "floorNet" | "channels" | "quantity">): ItemStage {
@@ -80,12 +94,15 @@ export function stageOf(item: Pick<InventoryItem, "facts" | "floorNet" | "channe
 
 /**
  * New channel states after a sale on `soldOn`: the sale channel is marked sold
- * and every other live listing must come down.
+ * and every other live listing must come down. The store's own listing comes
+ * down by itself, since zeroing the quantity takes it off sale.
  */
 export function applySale(states: ChannelListingState[], soldOn: ChannelId, now: string): ChannelListingState[] {
   const next = states.map((s): ChannelListingState => {
     if (s.channel === soldOn) return { ...s, status: "sold", updatedAt: now };
-    if (s.status === "active" || s.status === "queued") return { ...s, status: "needs_delist", updatedAt: now };
+    if (s.status === "active" || s.status === "queued") {
+      return { ...s, status: s.channel === "shopify" ? "delisted" : "needs_delist", updatedAt: now };
+    }
     return s;
   });
   if (!next.some((s) => s.channel === soldOn)) next.push({ channel: soldOn, status: "sold", updatedAt: now });
