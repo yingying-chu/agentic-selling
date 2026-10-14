@@ -17,36 +17,30 @@ Live app: https://sellie-dusky.vercel.app (Shopify app + phone web page + MCP en
 ## How it works
 
 ```mermaid
-flowchart LR
-    subgraph List["Listing it"]
-        direction TB
-        A["1 · Snap photos<br/>phone page"] --> B["2 · Identify<br/>Claude via AI Gateway"]
-        B --> C["3 · Where + price<br/>from your take-home floor"]
-        C --> D["4 · Pro photos<br/>cutout + Gemini renders,<br/>honesty-checked"]
-        D --> E["5 · Agent posts<br/>MCP kit → Claude in Chrome<br/>Poshmark · Vinted · FB"]
-    end
-    subgraph Sell["Selling it"]
-        direction TB
-        F["6 · Watched<br/>every live listing,<br/>every 10 min"] --> G["7 · Sells anywhere<br/>listing says sold out,<br/>or Shopify checkout"]
-        G --> H["8 · Locked<br/>Shopify qty 1 → 0"]
-        H --> I["9 · Take down the rest<br/>agent or one tap"]
-    end
-    E --> F
+flowchart TD
+    A["1. Snap photos<br/>on the phone page"] --> B["2. Identify<br/>Claude via AI Gateway"]
+    B --> C["3. Where + price<br/>from your take-home floor"]
+    C --> D["4. Pro photos<br/>cutout + Gemini renders,<br/>honesty-checked"]
+    D --> E["5. Agent posts<br/>MCP kit, Claude in Chrome<br/>Poshmark, Vinted, FB"]
+    E --> F["6. Watched<br/>every live listing, every 10 min"]
+    F --> G["7. Sells anywhere<br/>listing says sold out,<br/>or a Shopify checkout"]
+    G --> H["8. Locked<br/>Shopify quantity 1 to 0"]
+    H --> I["9. Take down the rest<br/>agent or one tap"]
 ```
 
 ```mermaid
 flowchart TB
-    Phone["Phone page /s/key"] --> App
-    Claude["Claude / ChatGPT<br/>MCP /mcp?key=…"] --> App
-    Admin["Shopify admin<br/>(embedded app)"] --> App
-    App["Sellie on Vercel<br/>React Router app + shared selling logic<br/>pricing · routing · photo policy · sale lock"]
-    App --> Shopify["Shopify Admin API<br/>products + media · metafields<br/>qty lock · inventory webhook"]
-    App --> Gateway["Vercel AI Gateway<br/>Claude (vision + text)<br/>Gemini (images)<br/>automatic fallback"]
+    Phone["Phone page"] --> App
+    Assistant["Claude or ChatGPT<br/>via MCP"] --> App
+    Admin["Shopify admin<br/>embedded app"] --> App
+    App["Sellie on Vercel<br/>React Router app + shared selling logic<br/>pricing, routing, photo policy, sale lock"]
+    App --> Shopify["Shopify Admin API<br/>products + media, metafields<br/>quantity lock, inventory webhook"]
+    App --> Gateway["Vercel AI Gateway<br/>Claude for vision + text<br/>Gemini for images<br/>automatic fallback"]
     Cron["Vercel Cron<br/>every 10 min"] --> App
-    App --> Neon["Neon Postgres<br/>sessions · settings · private links"]
-    Agent["Claude in Chrome<br/>(seller's own browser)"] --> Markets["Poshmark · Vinted · FB Marketplace"]
-    Claude -. posting kit .-> Agent
-    App -. reads public listing pages .-> Markets
+    App --> Neon["Neon Postgres<br/>sessions, settings, private links"]
+    Assistant -.->|posting kit| Agent["Claude in Chrome<br/>seller's own browser"]
+    Agent --> Markets["Poshmark, Vinted,<br/>FB Marketplace"]
+    App -.->|reads public listing pages| Markets
 ```
 
 **Where Shopify fits:** each item is a Shopify product, kept private until it's put on the store. Photos are product media. Everything Sellie learns is stored in app metafields: item details, floor, per-platform listings, where it's live, photo kinds and the AI trace. Shopify quantity is the lock.
