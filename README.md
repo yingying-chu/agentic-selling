@@ -14,6 +14,10 @@ Sellie is an agentic selling tool for people clearing out a closet, not running 
 
 Live app: https://sellie-dusky.vercel.app (Shopify app + phone web page + MCP endpoint, on Vercel)
 
+**Demo videos**
+- [Sellie demo (YouTube Short)](https://youtube.com/shorts/wWNxYnjX3Fc)
+- [The agent posting a listing to Poshmark (Loom)](https://www.loom.com/share/e17df555398c4667b319f074b198831e)
+
 ## How it works
 
 ```mermaid
@@ -94,7 +98,7 @@ You need two things, both in our submission: the **judge link** (a private phone
 2. Check out with the test card shown on the page. No real money moves.
 3. Go back to the phone page. Within a few seconds the item flips to **Sold**: Shopify quantity is now 0, and **Take these down now** lists every marketplace it was posted on, each with a link.
 
-**4. The agent posting (in our demo video)**
+**4. The agent posting ([watch on Loom](https://www.loom.com/share/e17df555398c4667b319f074b198831e))**
 Posting to Poshmark, Vinted and FB happens in the seller's own signed-in browser, so judges see it in the video rather than live. Claude reads the item's posting kit over MCP (title, description, price, photos in order, offer floor), fills in the marketplace form with Claude in Chrome, publishes it, and saves the listing link back to Sellie. From then on the 10-minute sale check watches that listing.
 
 Something stuck? Reload the page: every step saves to Shopify as it finishes, so nothing is lost. The **Check for sales** button on the home page runs the marketplace sale check on demand.
