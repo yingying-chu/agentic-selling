@@ -241,7 +241,6 @@ export function registerTools(server: McpServer, store: InventoryStore, shop: st
     },
     async ({ item_id, model_photo }) => {
       const item = await load(item_id);
-      if (item.photos.some((p) => p.kind !== "original")) return text("This item already has listing-ready photos.");
       const r = await makeListingPhotos(store, item, model_photo);
       return json(`Added ${r.added} photos.`, { retakeTips: r.retakeTips, worthAdding: r.missingShots, droppedForAccuracy: r.rejected });
     },

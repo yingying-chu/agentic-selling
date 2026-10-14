@@ -38,7 +38,9 @@ async function originals(item: InventoryItem): Promise<PhotoInput[]> {
 export async function makeListingPhotos(store: InventoryStore, item: InventoryItem, modelPhoto: boolean) {
   const inputs = await originals(item);
   if (!inputs.length) throw new Error("This item has no photos yet.");
-  const result = await improvePhotos(inputs, item.facts, { modelPhoto });
+  // On a redo, the corrected photos already exist; only the AI photos are made again.
+  const skipEnhance = item.photos.some((p) => p.kind === "enhanced");
+  const result = await improvePhotos(inputs, item.facts, { modelPhoto, skipEnhance });
   await store.addPhotos(
     item.id,
     result.outputs.map((o) => ({ data: o.data, mediaType: o.mediaType, alt: o.alt, kind: o.kind, sourceUrl: o.source })),
@@ -47,6 +49,6 @@ export async function makeListingPhotos(store: InventoryStore, item: InventoryIt
     added: result.outputs.length,
     retakeTips: result.retakeTips,
     missingShots: result.assessment.missingShots,
-    rejected: result.rejected.map((r) => r.kind),
+    rejected: result.rejected.map((r) => ({ kind: r.kind, why: r.issues.slice(0, 2).join(" ") })),
   };
 }

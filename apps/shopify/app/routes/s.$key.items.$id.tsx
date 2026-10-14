@@ -233,6 +233,9 @@ export default function PhoneItem() {
               {photoResult.photoNotes.retakeTips.map((t) => (
                 <div key={t}>↻ {t}</div>
               ))}
+              {photoResult.photoNotes.rejected.map((r) => (
+                <div key={r.kind}>✗ Left out the {r.kind.replace("ai_", "AI ").replace("_", " ")} photo: {r.why}</div>
+              ))}
               {photoResult.photoNotes.missingShots.length > 0 && (
                 <div>+ Worth adding: {photoResult.photoNotes.missingShots.join(", ")}</div>
               )}
@@ -242,7 +245,19 @@ export default function PhoneItem() {
       )}
 
       <div className="card">
-        <h2>Photos</h2>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0 }}>Photos</h2>
+          {processedPhotos && (
+            <button
+              type="button"
+              className="btn"
+              disabled={photosRunning}
+              onClick={() => photoFetcher.submit({ intent: "photos", simulate: simulate ? "1" : "0" }, { method: "post" })}
+            >
+              {photosRunning ? "Working…" : "Redo AI photos"}
+            </button>
+          )}
+        </div>
         <div className="grid">
           {item.photos.map((p) => (
             <div className="tile" key={p.url}>
