@@ -182,7 +182,7 @@ export default function PhoneItem() {
 
   const steps = [
     { label: "Reading tags and identifying the item", done: Boolean(facts), active: running === "analyze" },
-    { label: "Fixing light and color, making a studio cover and a model photo", done: processedPhotos, active: photosRunning },
+    { label: "Fixing light, then making a stock-quality cover and a model photo (each scored for honesty and quality)", done: processedPhotos, active: photosRunning },
     { label: "Pricing for each platform from your floor", done: Boolean(plan), active: running === "floor" },
     { label: "Writing a listing for each platform", done: kits.length > 0, active: running === "listings" || running === "floor" },
   ];
@@ -263,7 +263,7 @@ export default function PhoneItem() {
             <div className="tile" key={p.url}>
               <img src={p.url} alt={p.alt ?? ""} />
               {p.kind !== "original" && (
-                <span className="chip">{p.kind === "ai_model" ? "AI model" : p.kind === "studio" ? "Studio" : p.kind === "enhanced" ? "Fixed" : "AI"}</span>
+                <span className="chip">{p.kind === "ai_model" ? "AI model" : p.kind === "studio" ? "Studio" : p.kind === "enhanced" ? "Fixed" : "AI product shot"}</span>
               )}
             </div>
           ))}

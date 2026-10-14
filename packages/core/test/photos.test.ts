@@ -26,3 +26,13 @@ test("AI images alone are never enough", () => {
   const { photos: out } = photosForChannel([{ url: "m1", kind: "ai_model", alt: null }], "ebay");
   assert.equal(out.length, 0);
 });
+
+test("AI product shot can lead where allowed, real photo right after", () => {
+  const set: ListingPhoto[] = [
+    { url: "o1", kind: "original", alt: null },
+    { url: "e1", kind: "enhanced", alt: null, sourceUrl: "o1" },
+    { url: "r1", kind: "ai_regenerated", alt: null },
+  ];
+  assert.deepEqual(photosForChannel(set, "poshmark").photos.map((p) => p.url), ["r1", "e1"]);
+  assert.deepEqual(photosForChannel(set, "vinted").photos.map((p) => p.url), ["e1"]);
+});

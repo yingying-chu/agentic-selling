@@ -11,7 +11,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     items: items.map((i) => ({
       id: i.id.split("/").pop()!,
       title: i.facts?.title ?? i.title,
-      thumb: (i.photos.find((p) => p.kind === "studio") ?? i.photos[0])?.url ?? null,
+      thumb: (i.photos.find((p) => p.kind === "studio") ?? i.photos.find((p) => p.kind === "ai_regenerated") ?? i.photos[0])?.url ?? null,
       stage: i.stage,
       needsDelist: i.channels.filter((c) => c.status === "needs_delist").length,
     })),

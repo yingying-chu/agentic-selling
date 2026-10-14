@@ -1,4 +1,4 @@
-// Usage: npm run photos -- [--model] [--regenerate] photo1.jpg photo2.jpg ...
+// Usage: npm run photos -- [--model] [--regenerate (force the AI product shot on)] photo1.jpg photo2.jpg ...
 // Writes listing-ready photos to out/photos-<timestamp>/.
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -26,7 +26,7 @@ const inputs = await Promise.all(
 );
 const result = await improvePhotos(inputs, facts, {
   modelPhoto: values.model,
-  regenerateIfNoCover: values.regenerate,
+  productShot: values.regenerate || undefined,
   log: (m) => console.log(`… ${m}`),
 });
 
