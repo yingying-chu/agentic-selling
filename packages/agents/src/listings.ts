@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CHANNELS, type ChannelId, type ChannelPrice, type ItemFacts, type ListingDraft } from "@agentic-selling/core";
-import { claude, MODEL } from "./claude.ts";
+import { CHANNELS, fitText, type ChannelId, type ChannelPrice, type ItemFacts, type ListingDraft } from "@agentic-selling/core";
+import { claude, fallbackParams, model } from "./claude.ts";
 
 const DraftSchema = z.object({
   drafts: z.array(
@@ -26,14 +26,6 @@ Rules for every channel:
 - tags: platform keywords/hashtags where the platform uses them, otherwise an empty list.
 - categoryHint: the platform's category path as best you know it, e.g. "Women > Dresses > Midi".`;
 
-/** Trims to the limit at a word boundary; the model usually respects limits but adapters reject overlong titles. */
-function fit(text: string, max: number): string {
-  if (max <= 0 || text.length <= max) return text;
-  const cut = text.slice(0, max);
-  const lastSpace = cut.lastIndexOf(" ");
-  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
-}
-
 export async function writeListings(
   facts: ItemFacts,
   prices: Partial<Record<ChannelId, ChannelPrice>>,
@@ -51,10 +43,9 @@ export async function writeListings(
   });
 
   const response = await claude().beta.messages.parse({
-    model: MODEL,
+    model: model(),
     max_tokens: 32000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...fallbackParams(),
     output_config: { effort: "medium", format: zodOutputFormat(DraftSchema) },
     system: SYSTEM,
     messages: [
@@ -79,8 +70,8 @@ export async function writeListings(
     return [
       {
         channel: id,
-        title: fit(d.title, c.titleMaxLength),
-        description: fit(d.description, c.descriptionMaxLength),
+        title: fitText(d.title, c.titleMaxLength),
+        description: fitText(d.description, c.descriptionMaxLength),
         tags: d.tags,
         categoryHint: d.categoryHint,
         price,

@@ -1,0 +1,107 @@
+import { CHANNELS, type ChannelId } from "./channels.ts";
+import type { ChannelListingState, ItemFacts, ListingDraft } from "./types.ts";
+
+// The inventory layer. Shopify is the first implementation; a hosted database
+// for sellers without Shopify can implement the same interface later. All the
+// selling logic talks to InventoryStore, never to Shopify directly.
+
+export interface InventoryPhoto {
+  url: string;
+  alt: string | null;
+}
+
+/** Where an item is in its life, derived from what's been saved. */
+export type ItemStage = "needs_details" | "needs_floor" | "ready_to_list" | "listed" | "sold";
+
+export interface InventoryItem {
+  id: string;
+  title: string;
+  photos: InventoryPhoto[];
+  /** null when the store isn't tracking quantity for this item. */
+  quantity: number | null;
+  floorNet: number | null;
+  facts: ItemFacts | null;
+  listings: ListingDraft[];
+  channels: ChannelListingState[];
+  stage: ItemStage;
+  /** Link to the item in the store's own admin, if there is one. */
+  adminUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListItemsOptions {
+  stage?: ItemStage;
+  limit?: number;
+  after?: string;
+}
+
+export interface InventoryStore {
+  listItems(opts?: ListItemsOptions): Promise<{ items: InventoryItem[]; nextCursor?: string }>;
+  getItem(id: string): Promise<InventoryItem | null>;
+  saveFacts(id: string, facts: ItemFacts): Promise<void>;
+  saveFloor(id: string, floorNet: number): Promise<void>;
+  saveListings(id: string, drafts: ListingDraft[]): Promise<void>;
+  saveChannelStates(id: string, states: ChannelListingState[]): Promise<void>;
+  /** Sets on-hand quantity to zero so the item can't sell twice. */
+  zeroQuantity(id: string): Promise<void>;
+}
+
+export function stageOf(item: Pick<InventoryItem, "facts" | "floorNet" | "channels" | "quantity">): ItemStage {
+  if (item.channels.some((c) => c.status === "sold") || item.quantity === 0) return "sold";
+  if (!item.facts) return "needs_details";
+  if (item.floorNet === null) return "needs_floor";
+  if (item.channels.some((c) => c.status === "active")) return "listed";
+  return "ready_to_list";
+}
+
+/**
+ * New channel states after a sale on `soldOn`: the sale channel is marked sold
+ * and every other live listing must come down.
+ */
+export function applySale(states: ChannelListingState[], soldOn: ChannelId, now: string): ChannelListingState[] {
+  const next = states.map((s): ChannelListingState => {
+    if (s.channel === soldOn) return { ...s, status: "sold", updatedAt: now };
+    if (s.status === "active" || s.status === "queued") return { ...s, status: "needs_delist", updatedAt: now };
+    return s;
+  });
+  if (!next.some((s) => s.channel === soldOn)) next.push({ channel: soldOn, status: "sold", updatedAt: now });
+  return next;
+}
+
+export function upsertChannelState(
+  states: ChannelListingState[],
+  update: Omit<ChannelListingState, "updatedAt">,
+  now: string,
+): ChannelListingState[] {
+  const merged = { ...states.find((s) => s.channel === update.channel), ...update, updatedAt: now };
+  return [...states.filter((s) => s.channel !== update.channel), merged];
+}
+
+export interface SaleResult {
+  item: InventoryItem;
+  /** Listings the seller still has to take down, with links where we have them. */
+  toDelist: Array<{ channel: ChannelId; name: string; url?: string; automatic: boolean }>;
+}
+
+/** Records a sale: zeroes quantity first (the lock), then updates every channel's state. */
+export async function recordSale(store: InventoryStore, id: string, soldOn: ChannelId): Promise<SaleResult> {
+  const item = await store.getItem(id);
+  if (!item) throw new Error(`Item ${id} not found`);
+
+  await store.zeroQuantity(id);
+  const states = applySale(item.channels, soldOn, new Date().toISOString());
+  await store.saveChannelStates(id, states);
+
+  const toDelist = states
+    .filter((s) => s.status === "needs_delist")
+    .map((s) => ({
+      channel: s.channel,
+      name: CHANNELS[s.channel].name,
+      url: s.url,
+      // Nothing is delisted through an API yet; eBay will flip this once its adapter lands.
+      automatic: false,
+    }));
+  const updated = { ...item, quantity: 0, channels: states, stage: "sold" as const };
+  return { item: updated, toDelist };
+}

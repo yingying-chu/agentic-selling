@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { CategoryGroup, ItemFacts } from "@agentic-selling/core";
-import { claude, imageBlocks, MODEL, type PreparedPhoto } from "./claude.ts";
+import { claude, fallbackParams, imageBlocks, model, type PreparedPhoto } from "./claude.ts";
 
 const CATEGORY_GROUPS = [
   "womens_clothing",
@@ -21,7 +21,7 @@ const CATEGORY_GROUPS = [
   "other",
 ] as const satisfies readonly CategoryGroup[];
 
-const ItemFactsSchema = z.object({
+export const ItemFactsSchema = z.object({
   title: z.string(),
   brand: z.string().nullable(),
   itemType: z.string(),
@@ -54,10 +54,9 @@ If the item could be counterfeit (luxury brand, mismatched tags), say so in ques
 
 export async function identifyItem(photos: PreparedPhoto[], sellerNotes = ""): Promise<ItemFacts> {
   const response = await claude().beta.messages.parse({
-    model: MODEL,
+    model: model(),
     max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...fallbackParams(),
     output_config: { effort: "high", format: zodOutputFormat(ItemFactsSchema) },
     system: SYSTEM,
     messages: [

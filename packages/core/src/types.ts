@@ -36,13 +36,19 @@ export interface ListingDraft {
   price: ChannelPrice;
 }
 
-export type ListingStatus = "draft" | "queued" | "active" | "sold" | "delisted" | "error";
+/**
+ * needs_delist: the item sold elsewhere and this listing must come down. For
+ * platforms without an API the seller does it by hand, so it stays here until
+ * they confirm.
+ */
+export type ListingStatus = "draft" | "queued" | "active" | "sold" | "needs_delist" | "delisted" | "error";
 
 /** Per-channel state, stored as a Shopify metafield on the product. */
 export interface ChannelListingState {
   channel: ChannelId;
   status: ListingStatus;
   externalId?: string;
+  /** Link to the listing (or its edit page) on the platform. */
   url?: string;
   listedPrice?: number;
   updatedAt: string;

@@ -23,7 +23,7 @@ if (!positionals.length || !Number.isFinite(floorNet) || floorNet <= 0) {
 
 const result = await runIntake(
   {
-    photoPaths: positionals,
+    photos: positionals,
     floorNet,
     sellerNotes: values.notes,
     labelCost: Number(values.ship),

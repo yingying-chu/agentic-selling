@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Postgres everywhere (Neon via the Vercel Marketplace in production) so
+// serverless functions share one database.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+/// Per-shop selling preferences.
+model ShopSettings {
+  shop               String   @id
+  enabledChannels    String[] @default(["ebay", "poshmark", "mercari", "depop", "vinted", "grailed"])
+  labelCost          Float    @default(8)
+  sellerPaysShipping Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
+}
+
+/// A link that lets an AI assistant (Claude, ChatGPT, ...) act on one shop.
+/// Only the SHA-256 of the secret is stored; the full link is shown once.
+model McpConnection {
+  id         String    @id @default(cuid())
+  shop       String
+  label      String
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([shop])
+}

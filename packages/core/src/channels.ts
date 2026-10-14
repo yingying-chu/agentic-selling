@@ -229,3 +229,11 @@ export const CHANNELS: Record<ChannelId, ChannelProfile> = {
       "Only vintage (20+ years old), handmade, or craft supplies are allowed. Descriptive, search-friendly title; 13 tags; story-driven description including era and provenance.",
   },
 };
+
+/** Trims to a limit at a word boundary. Models usually respect limits, but marketplaces reject overlong text. */
+export function fitText(text: string, max: number): string {
+  if (max <= 0 || text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
+}
