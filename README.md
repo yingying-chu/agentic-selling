@@ -21,16 +21,29 @@ Live app: https://sellie-dusky.vercel.app (Shopify app + phone web page + MCP en
 ## How it works
 
 ```mermaid
-flowchart TD
-    A["1. Snap photos<br/>on the phone page"] --> B["2. Identify<br/>Claude via AI Gateway"]
-    B --> C["3. Where + price<br/>from your take-home floor"]
-    C --> D["4. Pro photos<br/>cutout + Gemini renders,<br/>honesty-checked"]
-    D --> E["5. Agent posts<br/>MCP kit, Claude in Chrome<br/>Poshmark, Vinted, FB"]
-    E --> F["6. Watched<br/>every live listing, every 10 min"]
-    F --> G["7. Sells anywhere<br/>listing says sold out,<br/>or a Shopify checkout"]
-    G --> H["8. Locked<br/>Shopify quantity 1 to 0"]
-    H --> I["9. Take down the rest<br/>agent or one tap"]
+flowchart TB
+    subgraph L["Listing it"]
+        direction LR
+        A["1. Snap photos"] --> B["2. Claude<br/>identifies"] --> C["3. Price per<br/>platform"] --> D["4. Pro photos"] --> E["5. Agent posts"]
+    end
+    subgraph S["Selling it"]
+        direction LR
+        F["6. Watched<br/>every 10 min"] --> G["7. Sells<br/>anywhere"] --> H["8. Shopify<br/>locks it"] --> I["9. Take down<br/>the rest"]
+    end
+    L --> S
 ```
+
+| Step | What happens |
+|---|---|
+| 1. Snap photos | On the phone page; saved as a private Shopify draft product |
+| 2. Claude identifies | Brand, size, condition and value, via Vercel AI Gateway |
+| 3. Price per platform | Picks marketplaces by category; prices each back from your take-home floor |
+| 4. Pro photos | Real-pixel studio cutout + Gemini renders, each honesty-checked by Claude |
+| 5. Agent posts | Claude reads the posting kit over MCP and fills in Poshmark, Vinted or FB with Claude in Chrome |
+| 6. Watched | Vercel Cron checks every live listing every 10 minutes |
+| 7. Sells anywhere | The listing page says sold out, or a Shopify checkout fires the inventory webhook |
+| 8. Shopify locks it | Quantity 1 → 0, so it can't sell twice |
+| 9. Take down the rest | Every other listing is flagged; the agent or you take them down |
 
 ```mermaid
 flowchart TB
