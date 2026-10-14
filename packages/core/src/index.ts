@@ -5,3 +5,4 @@ export * from "./routing.ts";
 export * from "./types.ts";
 export * from "./inventory.ts";
 export * from "./plan.ts";
+export * from "./photos.ts";

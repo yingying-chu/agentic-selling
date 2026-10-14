@@ -12,7 +12,8 @@
   "scripts": {
     "test": "node --test packages/*/test/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "intake": "node --env-file-if-exists=.env packages/agents/src/cli/intake.ts"
+    "intake": "node --env-file-if-exists=.env packages/agents/src/cli/intake.ts",
+    "photos": "node --env-file-if-exists=.env packages/agents/src/cli/photos.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
