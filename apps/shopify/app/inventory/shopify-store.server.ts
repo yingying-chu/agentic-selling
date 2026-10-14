@@ -36,7 +36,7 @@ const PRODUCT_FIELDS = `#graphql
         id
         ... on MediaImage {
           image {
-            url(transform: { maxWidth: 1024, maxHeight: 1024 })
+            url(transform: { maxWidth: 1600, maxHeight: 1600 })
             altText
           }
         }
