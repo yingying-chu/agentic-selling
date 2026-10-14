@@ -1,51 +1,64 @@
-# This file stores configurations for your Shopify app.
-client_id = ""
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "09da9d7fd8d368b59c57d15b0da9107e"
+name = "Sellie"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_products,write_products,read_inventory,write_inventory,read_locations"
 
 [webhooks]
-api_version = "2026-10"
+api_version = "2027-01"
 
-  # Handled by: /app/routes/webhooks.app.uninstalled.tsx
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
-  topics = ["app/uninstalled"]
+  topics = [ "app/uninstalled" ]
 
-  # Handled by: /app/routes/webhooks.app.scopes_update.tsx
   [[webhooks.subscriptions]]
-  topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
 
-  # Mandatory compliance topics for public apps.
-  # See: https://shopify.dev/docs/apps/build/privacy-law-compliance
   [[webhooks.subscriptions]]
   uri = "/webhooks/compliance"
-  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
 
-# App-owned product metafields (namespace "$app" in GraphQL). Merchants can
-# read them in the admin; the app writes them.
 [product.metafields.app.floor_net]
 name = "Take-home floor"
 description = "Least the seller wants to keep after fees and shipping (USD)"
 type = "number_decimal"
-access.admin = "merchant_read_write"
+
+  [product.metafields.app.floor_net.access]
+  admin = "merchant_read_write"
 
 [product.metafields.app.facts]
 name = "Item details"
 description = "Brand, size, condition, flaws and more, used to write listings"
 type = "json"
-access.admin = "merchant_read"
+
+  [product.metafields.app.facts.access]
+  admin = "merchant_read"
 
 [product.metafields.app.listings]
 name = "Marketplace listings"
 description = "Listing text and price for each marketplace"
 type = "json"
-access.admin = "merchant_read"
+
+  [product.metafields.app.listings.access]
+  admin = "merchant_read"
 
 [product.metafields.app.channels]
 name = "Marketplace status"
 description = "Where the item is posted, sold, or needs to be taken down"
 type = "json"
-access.admin = "merchant_read"
+
+  [product.metafields.app.channels.access]
+  admin = "merchant_read"
+
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
