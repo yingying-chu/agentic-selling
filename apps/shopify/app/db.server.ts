@@ -6,6 +6,12 @@ declare global {
 }
 
 if (process.env.NODE_ENV !== "production") {
+  // Vite's dev server doesn't put .env into process.env for server code; Vercel sets real env vars in production.
+  try {
+    process.loadEnvFile();
+  } catch {
+    // No .env file; rely on the environment.
+  }
   if (!global.prismaGlobal) {
     global.prismaGlobal = new PrismaClient();
   }
