@@ -2,7 +2,7 @@
 
 client_id = "09da9d7fd8d368b59c57d15b0da9107e"
 name = "Sellie"
-application_url = "https://shopify.dev/apps/default-app-home"
+application_url = "https://sellie-dusky.vercel.app"
 embedded = true
 
 [access_scopes]
@@ -65,8 +65,7 @@ type = "json"
   admin = "merchant_read"
 
 [auth]
-redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+redirect_urls = [ "https://sellie-dusky.vercel.app/auth/callback", "https://sellie-dusky.vercel.app/auth/shopify/callback", "https://sellie-dusky.vercel.app/api/auth/callback" ]
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
